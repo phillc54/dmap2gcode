@@ -1,173 +1,89 @@
-#!/usr/bin/python
-"""
-    dmap2gcode G-Code Generator
+#!/usr/bin/python3
 
-    Copyright (C) <2013-2021>  <Scorch>
-    Source was used from the following works:
-              image-to-gcode.py   2005 Chris Radek chris@timeguy.com
-              image-to-gcode.py   2006 Jeff Epler
-              Author.py(linuxcnc) 2007 Jeff Epler  jepler@unpythonic.net
+'''###############################################################################
+#                                                                                #
+#    dmap2gcode - Generate G-code from an image file                                                 #
+#                                                                                #
+#    Copyright (C) <2013-2021>  <Scorch>                                         #
+#    Source was used from the following works:                                   #
+#              image-to-gcode.py   2005 Chris Radek chris@timeguy.com            #
+#              image-to-gcode.py   2006 Jeff Epler                               #
+#              Author.py(linuxcnc) 2007 Jeff Epler  jepler@unpythonic.net        #
+#                                                                                #
+#    This program is free software: you can redistribute it and/or modify        #
+#    it under the terms of the GNU General Public License as published by        #
+#    the Free Software Foundation, either version 3 of the License, or           #
+#    (at your option) any later version.                                         #
+#                                                                                #
+#    This program is distributed in the hope that it will be useful,             #
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of              #
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the               #
+#    GNU General Public License for more details.                                #
+#                                                                                #
+#    You should have received a copy of the GNU General Public License           #
+#    along with this program.  If not, see <http://www.gnu.org/licenses/>.       #
+#                                                                                #
+#    To use with LinuxCNC see the instructions at:                               #
+#    http://wiki.linuxcnc.org/cgi-bin/emcinfo.pl?Simple_EMC_G-Code_Generators    #
+#                                                                                #
+###############################################################################'''
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-    To make it a menu item in Ubuntu use the Alacarte Menu Editor and add
-    the command python YourPathToThisFile/ThisFilesName.py
-    make sure you have made the file executable by right
-    clicking and selecting properties then Permissions and Execute
-
-    To use with EMC2 see the instructions at:
-    http://wiki.linuxcnc.org/cgi-bin/emcinfo.pl?Simple_EMC_G-Code_Generators
-
-    Version 0.01
-    - Initial code
-
-    Version 0.02
-    - Updated e-mail address and web page in "Help - About"
-    - Added option to disable arcs in the g-code output (useful for GRBL/ShapeOko) 
-    - Fixed bug resulting in the selection of columns then rows having no effect
-    - Added automatic scaling of all linear dimensions values when changing between units (in/mm)
-    - fixed bug when using a configuration file ("dmap2gcode.ngc")
-
-    Version 0.03
-    - Fixed crash when filename contains non ASCII character
-
-    Version 0.04
-    - Fixed crash when roughing cutter is smaller than final cutter.
-
-    Version 0.05
-    - Eliminated G91.1 code when arcs are disabled.
-
-    Version 0.06
-    - Fixed GUI refresh (get rid of red warning) after a bad value was entered for "Top Tolerance"
-    - Fixed compatibility with Python 3
-    - Added .tap to extension list
-
-    Version 0.07
-    - Added save configuration button in general settings
-    - Added logic to make PIL loading work with more python variations
-    - Fixed settings reading problem with feed rates, cut perimeter and arc fitting
-    - Removed coolant related M codes from header and footer
-    - Removed automatic G64 insertion (now it must be handled in the g-code header)
-
-    Version 0.08
-    - Added ability to use pipe characters (|) to create carriage returns in the g-code header and postscript.
-
-    Version 0.09
-    - Changed the default settings to be compatible with more g-code interpretors
-    - Added option to suppress comments in output g-code file (default is now suppressed)
-
-    Version 0.10
-    - Fixed error message when unable to open file the wrong file name appeared.
-    - Removed some library loading code that was causing erratic behavior.
-
-    Version 0.11
-    - Made changes to be compatible with modern latest PIL and NUMPY
-
-    Version 0.12
-    - Made additional changes to be compatible with modern latest PIL and NUMPY
-    - Fixed tool-path problem when using cut perimeter option
-    - Added cut perimeter option to roughing menu
-    - Added support for 16 bit gray scale images for better depth map resolution
-
-    Version 0.13
-    - Made changes to be compatible with modern latest PIL release (replace .ANTIALIAS with .LANCZOS)
-
-"""
 version = '0.13'
 
 import sys
 VERSION = sys.version_info[0]
 
-if VERSION == 3:
-    from tkinter import *
-    from tkinter.filedialog import *
-    import tkinter.messagebox
-    MAXINT = sys.maxsize
+if VERSION < 3:
+    quit()
 
-else:
-    from Tkinter import *
-    from tkFileDialog import *
-    import tkMessageBox
-    MAXINT = sys.maxint
-
-if VERSION < 3 and sys.version_info[1] < 6:
-    def next(item):
-        return item.next()
-
-try:
-    import psyco
-    psyco.full()
-    sys.stdout.write("(Psyco loaded)\n")
-    pass
-except:
-    pass
-
-from math import *
-from time import time
 import os
-#import re
-#import binascii
 import getopt
 import operator
 import webbrowser
 import struct
+from math import *
+from time import time
+from tkinter import *
+from tkinter.filedialog import *
+import tkinter.messagebox
 
-PIL = True
-if PIL == True:
-    try:
-        from PIL import Image
-        from PIL import ImageTk
-#        from PIL import ImageOps
-        #import _imaging
-    except:
-        PIL = False
-
-if PIL == True:
+try:
+    from PIL import Image
+    from PIL import ImageTk
     try:
         Image.LANCZOS
     except:
         Image.LANCZOS=Image.ANTIALIAS
+    PIL = True
+except:
+    PIL = False
 
-NUMPY = True
-if NUMPY == True:
+try:
     try:
-        try:
-            #import numpy.numarray as numarray
-            import numpy.core
-            olderr = numpy.core.seterr(divide='ignore')
-            #plus_inf = (numarray.array((1.,))/0.)[0]
-            plus_inf = (numpy.array((1.,))/0.)[0]
-            numpy.core.seterr(**olderr)
-        except ImportError:
-            import numarray, numarray.ieeespecial
-            plus_inf = numarray.ieeespecial.inf
-    except:
-        NUMPY = False
+        #import numpy.numarray as numarray
+        import numpy.core
+        olderr = numpy.core.seterr(divide='ignore')
+        #plus_inf = (numarray.array((1.,))/0.)[0]
+        plus_inf = (numpy.array((1.,))/0.)[0]
+        numpy.core.seterr(**olderr)
+    except ImportError:
+        import numarray, numarray.ieeespecial
+        plus_inf = numarray.ieeespecial.inf
+    NUMPY = True
+except:
+    NUMPY = False
 
 IN_AXIS   = "AXIS_PROGRESS_BAR" in os.environ
+QUIET = False # setting QUIET to True will stop almost all console messages
+STOP_CALC = False
+MIN_SIZE = [1000, 540]
+MAXINT = sys.maxsize
 
-#Setting QUIET to True will stop almost all console messages
-QUIET = False
-STOP_CALC = 0
-
-################################################################################
 class Application(Frame):
     def __init__(self, master):
         Frame.__init__(self, master)
-        self.w = 780
-        self.h = 490
-        frame = Frame(master, width= self.w, height=self.h)
+        self.w = MIN_SIZE[0]
+        self.h = MIN_SIZE[0]
         self.master = master
         self.x = -1
         self.y = -1
@@ -180,9 +96,7 @@ class Application(Frame):
             fmessage("NumPy was not found.")
             fmessage("    The program will function properly but the speed will be reduced.")
             fmessage("    With NumPy the speed of gcode generation is about eight times faster.")
-
         self.createWidgets()
-
 
     def createWidgets(self):
         self.initComplete = 0
@@ -191,36 +105,32 @@ class Application(Frame):
         self.master.bind('<Escape>', self.KEY_ESC)
         self.master.bind('<F1>', self.KEY_F1)
         self.master.bind('<F2>', self.KEY_F2)
-        self.master.bind('<F3>', self.KEY_F3)
+#        self.master.bind('<F3>', self.KEY_F3)
         self.master.bind('<F4>', self.KEY_F4)
         self.master.bind('<F5>', self.KEY_F5) #self.Recalculate_Click)
         self.master.bind('<Control-g>', self.KEY_CTRL_G)
-
-        self.show_axis    = BooleanVar()
-        self.invert       = BooleanVar()
-        self.normalize    = BooleanVar()
-        self.cuttop       = BooleanVar()
-        self.cutperim     = BooleanVar()
-        self.disable_arcs = BooleanVar()
-        self.no_comments  = BooleanVar()
-        self.origin       = StringVar()
-
-        self.yscale     = StringVar()
-        self.Xscale     = StringVar()
-        self.pixsize    = StringVar()
-        self.toptol     = StringVar()
-
-        self.tool       = StringVar()
-        self.dia        = StringVar()
-        self.v_angle    = StringVar()
-        self.scanpat    = StringVar()
-        self.scandir    = StringVar()
-        self.f_feed     = StringVar()
-        self.p_feed     = StringVar()
-        self.stepover   = StringVar()
-        self.z_cut      = StringVar()
-        self.z_safe     = StringVar()
-
+        self.show_axis      = BooleanVar()
+        self.invert         = BooleanVar()
+        self.normalize      = BooleanVar()
+        self.cuttop         = BooleanVar()
+        self.cutperim       = BooleanVar()
+        self.disable_arcs   = BooleanVar()
+        self.no_comments    = BooleanVar()
+        self.origin         = StringVar()
+        self.yscale         = StringVar()
+        self.Xscale         = StringVar()
+        self.pixsize        = StringVar()
+        self.toptol         = StringVar()
+        self.tool           = StringVar()
+        self.dia            = StringVar()
+        self.v_angle        = StringVar()
+        self.scanpat        = StringVar()
+        self.scandir        = StringVar()
+        self.f_feed         = StringVar()
+        self.p_feed         = StringVar()
+        self.stepover       = StringVar()
+        self.z_cut          = StringVar()
+        self.z_safe         = StringVar()
         self.ROUGH_TOOL     = StringVar()
         self.ROUGH_DIA      = StringVar()
         self.ROUGH_V_ANGLE  = StringVar()
@@ -232,27 +142,20 @@ class Application(Frame):
         self.ROUGH_DEPTH_PP = StringVar()
         self.ROUGH_OFFSET   = StringVar()
         self.ROUGH_CUTPERIM = BooleanVar()
-
-        self.units      = StringVar()
-        self.plungetype = StringVar()
-
-        self.lace_bound = StringVar()
-        self.cangle     = StringVar()
-        self.tolerance  = StringVar()
-        self.splitstep  = StringVar()
-
-        self.funits     = StringVar()
-
-        self.gpre        = StringVar()
-        self.gpost       = StringVar()
-
-        self.maxcut             = StringVar()
-        self.current_input_file = StringVar()
-
-        ###########################################################################
-        #                         INITILIZE VARIABLES                             #
+        self.units          = StringVar()
+        self.plungetype     = StringVar()
+        self.lace_bound     = StringVar()
+        self.cangle         = StringVar()
+        self.tolerance      = StringVar()
+        self.splitstep      = StringVar()
+        self.funits         = StringVar()
+        self.gpre           = StringVar()
+        self.gpost          = StringVar()
+        self.maxcut         = StringVar()
+        '''#######################################################################
+        #                         INITIALIZE VARIABLES                            #
         #    if you want to change a default setting this is the place to do it   #
-        ###########################################################################
+        ########################################################################'''
         self.show_axis.set(1)
         self.invert.set(0)
         self.normalize.set(0)
@@ -260,82 +163,59 @@ class Application(Frame):
         self.cutperim.set(1)
         self.disable_arcs.set(1)
         self.no_comments.set(1)
-
-        self.yscale.set("5.0")
-        self.Xscale.set("0")
-        self.pixsize.set("0")
+        self.yscale.set('100')
+        self.Xscale.set('0')
+        self.pixsize.set('0')
         self.toptol.set("-0.005")
-
-        self.tool.set("Ball")           # Options are "Ball", "Flat", "V"
-        self.scanpat.set("Rows")
-        self.scandir.set("Alternating") # Options are "Alternating",
-                                        #             "Positive"   , "Negative",
-                                        #              "Up Mill", "Down Mill"
+        self.tool.set("Ball") # Options are "Ball", "V", "Flat"
         self.v_angle.set("45")
-        self.f_feed.set("15")
-        self.p_feed.set("10")
-        self.stepover.set("0.04")
-        self.z_cut.set("-0.5")
-        self.z_safe.set("0.25")
-        self.dia.set("0.25")
-        self.scanpat.set("Rows")
-        self.scandir.set("Alternating") # Options are "Alternating",
-                                        #             "Positive"   , "Negative",
-                                        #              "Up Mill", "Down Mill"
-
-        self.ROUGH_TOOL.set("Ball")           # Options are "Ball", "Flat", "V"
+        self.scanpat.set("Rows") # Options are "Rows", "Columns", "R then C", "C then R"
+        self.scandir.set("Alternating") # Options are "Alternating", "Positive", "Negative", "Up Mill", "Down Mill"
+        self.f_feed.set('400')
+        self.p_feed.set('250')
+        self.stepover.set('1.0')
+        self.z_cut.set('-1.0')
+        self.z_safe.set('5.0')
+        self.dia.set('6.0')
+        self.ROUGH_TOOL.set("Ball") # Options are "Ball", "V", "Flat"
         self.ROUGH_V_ANGLE.set("45")
-        self.ROUGH_R_FEED.set("15.0")
-        self.ROUGH_P_FEED.set("10.0")
-        self.ROUGH_STEPOVER.set("0.04")
-        self.ROUGH_DEPTH_PP.set("0.10")
-        self.ROUGH_OFFSET.set("0.02")
-        self.ROUGH_DIA.set("0.25")
+        self.scanpat.set("Rows") # Options are "Rows", "Columns", "R then C", "C then R"
+        self.scandir.set("Alternating") # Options are "Alternating", "Positive", "Negative", "Up Mill", "Down Mill"
+        self.ROUGH_R_FEED.set('400')
+        self.ROUGH_P_FEED.set('250')
+        self.ROUGH_STEPOVER.set('1.0')
+        self.ROUGH_DEPTH_PP.set('1.0')
+        self.ROUGH_OFFSET.set('0.25')
+        self.ROUGH_DIA.set('5')
         self.ROUGH_SCANPAT.set("Rows")
-        self.ROUGH_SCANDIR.set("Alternating") # Options are "Alternating",
-                                        #             "Positive"   , "Negative",
-                                        #              "Up Mill", "Down Mill"
+        self.ROUGH_SCANDIR.set("Alternating") # Options are "Alternating", "Positive", "Negative", "Up Mill", "Down Mill"
         self.ROUGH_CUTPERIM.set(1)
-
-
-        self.origin.set("Default")      # Options are "Default",
-                                        #             "Top-Left", "Top-Center", "Top-Right",
-                                        #             "Mid-Left", "Mid-Center", "Mid-Right",
-                                        #             "Bot-Left", "Bot-Center", "Bot-Right"
-
-
-        self.units.set("in")            # Options are "in" and "mm"
+        self.origin.set("Default")  # Options are "Default", "Top-Left", "Top-Center", "Top-Right", "Mid-Left", "Mid-Center", "Mid-Right", "Bot-Left", "Bot-Center", "Bot-Right"
+        self.units.set("mm") # Options are "mm" or "in"
         self.plungetype.set("simple")
-
-        self.lace_bound.set("None")     # Options "Full", "None", "??"
+        self.lace_bound.set("None") # Options "Full", "None", "??"
         self.cangle.set("45.0")
-        self.tolerance.set("0.001")
+        self.tolerance.set('0.025')
         self.splitstep.set("0")        # Options
-
-        self.NGC_FILE     = (os.path.expanduser("~")+"/None")
-        self.IMAGE_FILE   = (os.path.expanduser("~")+"/None")
-
+        self.HOME_DIR = os.path.expanduser("~")
+        self.CONFIG_FILE = (os.path.join(self.HOME_DIR, "dmap2gcode.ngc"))
+        self.NGC_FILE = (os.path.join(self.HOME_DIR, "None"))
+        self.IMAGE_FILE = (os.path.join(self.HOME_DIR, "None"))
         self.aspect_ratio =  0
         self.SCALE = 1
-
         self.gcode = []
         self.segID = []
-
-        # PAN and ZOOM STUFF
+        # pan and zoom stuff
         self.panx = 0
         self.panx = 0
         self.lastx = 0
         self.lasty = 0
-
-        self.HOME_DIR     =  os.path.expanduser("~")
-
-        # Derived variables
+        # derived variables
         if self.units.get() == 'in':
             self.funits.set('in/min')
         else:
             self.units.set('mm')
             self.funits.set('mm/min')
-
         self.ui_TKimage = PhotoImage(format='gif',data=
          'R0lGODdhggDpAIAAAAAAAP///ywAAAAAggDpAAAC/oyPqcvtD6OctNqLs968'
         +'+w+G4kiW5ommCMC27uuqsgjXNjzn1833rQ5s+IbEoJGILBplyaZyWXJKn9DP'
@@ -367,52 +247,44 @@ class Application(Frame):
         self.wim = self.ui_TKimage.width()
         self.him = self.ui_TKimage.height()
         self.aspect_ratio =  float(self.wim-1) / float(self.him-1)
-
-        ##########################################################################
+        '''#######################################################################
         #                         G-Code Default Preamble                        #
-        ##########################################################################
         # G17        ; sets XY plane                                             #
         # G90        ; Fixed cycle, simple cycle, for roughing (Z-axis emphasis) #
         # G64        ; G64 without P option keeps the best speed possible, no    #
         #              matter how far away from the programmed point you end up. #
         # M3 S3000   ; Spindle start at 3000                                     #
         # M7         ; Turn mist coolant on                                      #
-        ##########################################################################
-        self.gpre.set("G17 G90 G64 P0.001 M3 S3000")
+        #######################################################################'''
+        self.gpre.set("G17|G90|G64 P0.025|M3 S3000")
 
-        ##########################################################################
+        '''#######################################################################
         #                        G-Code Default Postamble                        #
-        ##########################################################################
         # M5 ; Stop Spindle                                                      #
         # M9 ; Turn all coolant off                                              #
         # M2 ; End Program                                                       #
-        ##########################################################################
+        #######################################################################'''
         self.gpost.set("M5|M2")
-
         self.statusMessage = StringVar()
         self.statusMessage.set("Welcome to dmap2gcode")
-        ##########################################################################
-        ###                     END INITILIZING VARIABLES                      ###
-        ##########################################################################
+        '''#######################################################################
+        #                       END INITILIZING VARIABLES                        #
+        #######################################################################'''
 
-        # make a Status Bar
-        self.statusbar = Label(self.master, textvariable=self.statusMessage, \
-                                   bd=1, relief=SUNKEN , height=1)
+        # Status Bar
+        self.statusbar = Label(self.master, textvariable=self.statusMessage, bd=1, relief=SUNKEN , height=1)
         self.statusbar.pack(anchor=SW, fill=X, side=BOTTOM)
 
-
         # Buttons
-        self.Save_Button = Button(self.master,text="Save G-Code",command=self.menu_File_Save_G_Code_File_Finish)
-        self.Roughing_but = Button(self.master,text="Open Roughing Settings",command=self.ROUGH_Settings_Window)
+        self.Save_Button = Button(self.master,text="Save\nFinish G-Code", command=self.menu_File_Save_G_Code_File_Finish)
+        self.ROUGH_Save = Button(self.master,text="Save\nRoughing G-Code", command=self.menu_File_Save_G_Code_File_Rough)
 
         # Canvas
         lbframe = Frame( self.master )
         self.PreviewCanvas_frame = lbframe
-        self.PreviewCanvas = Canvas(lbframe, width=self.w-525, \
-                                        height=self.h-200, background="grey")
+        self.PreviewCanvas = Canvas(lbframe, width=self.w-525, height=self.h-200, background="grey")
         self.PreviewCanvas.pack(side=LEFT, fill=BOTH, expand=1)
         self.PreviewCanvas_frame.place(x=230, y=10)
-
         self.PreviewCanvas.bind("<1>"        , self.mousePanStart)
         self.PreviewCanvas.bind("<B1-Motion>", self.mousePan)
         self.PreviewCanvas.bind("<2>"        , self.mousePanStart)
@@ -420,9 +292,16 @@ class Application(Frame):
         self.PreviewCanvas.bind("<3>"        , self.mousePanStart)
         self.PreviewCanvas.bind("<B3-Motion>", self.mousePan)
 
-        # Left Column #
-        self.Label_font_prop = Label(self.master,text="Image Size:", anchor=W)
+        # Separators
+        self.separator1 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
+        self.separator2 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
+        self.separator3 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
+        self.separator4 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
+        self.separator5 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
+        self.separator6 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
 
+        # Left Column
+        self.Label_font_prop = Label(self.master,text="Image Size:", anchor=W)
         self.Label_Yscale = Label(self.master,text="Image Height", anchor=CENTER)
         self.Label_Yscale_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_Yscale = Entry(self.master,width="15")
@@ -430,220 +309,195 @@ class Application(Frame):
         self.Entry_Yscale.bind('<Return>', self.Recalculate_Click)
         self.yscale.trace_variable("w", self.Entry_Yscale_Callback)
         self.NormalColor =  self.Entry_Yscale.cget('bg')
-
-        self.Label_Yscale2 = Label(self.master,text="Image Width", anchor=CENTER)
+        self.Label_Yscale2 = Label(self.master,text="Image Width", anchor=E)
         self.Label_Yscale2_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Label_Yscale2_val = Label(self.master,textvariable=self.Xscale, anchor=W)
-
-        self.Label_PixSize = Label(self.master,text="Pixel Size", anchor=CENTER)
+        self.Label_PixSize = Label(self.master,text="Pixel Size", anchor=E)
         self.Label_PixSize_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Label_PixSize_val = Label(self.master,textvariable=self.pixsize, anchor=W)
-
-        self.Label_pos_orient = Label(self.master,text="Image Properties:",\
-                                          anchor=W)
-
-
-        self.Label_Origin      = Label(self.master,text="Origin", anchor=CENTER )
+        self.Label_pos_orient = Label(self.master,text="Image Properties:", anchor=W)
+        self.Label_Origin      = Label(self.master,text="Origin", anchor=E)
         self.Origin_OptionMenu = OptionMenu(root, self.origin,
-                                            "Top-Left",
-                                            "Top-Center",
-                                            "Top-Right",
-                                            "Mid-Left",
-                                            "Mid-Center",
-                                            "Mid-Right",
-                                            "Bot-Left",
-                                            "Bot-Center",
-                                            "Bot-Right",
+                                            "Top-Left",  "Top-Center", "Top-Right",
+                                            "Mid-Left", "Mid-Center", "Mid-Right",
+                                            "Bot-Left", "Bot-Center", "Bot-Right",
                                             "Default", command=self.Recalculate_RQD_Click)
-
-        #Radio Button
-        self.Label_Invert_Color_FALSE = Label(self.master,text="Depth Color")
-        self.Radio_Invert_Color_FALSE = Radiobutton(self.master,text="Black", value=False,
-                                         width="100", anchor=W)
+        self.Label_Invert_Color_FALSE = Label(self.master,text="Depth Color", anchor=E)
+        self.Radio_Invert_Color_FALSE = Radiobutton(self.master,text="Black", value=False, width="100", anchor=W)
         self.Radio_Invert_Color_FALSE.configure(variable=self.invert )
-        #self.Label_Invert_Color_TRUE = Label(self.master,text=" ")
-        self.Radio_Invert_Color_TRUE = Radiobutton(self.master,text="White", value=True,
-                                         width="100", anchor=W)
+        self.Radio_Invert_Color_TRUE = Radiobutton(self.master,text="White", value=True, width="100", anchor=W)
         self.Radio_Invert_Color_TRUE.configure(variable=self.invert )
-
-
-        self.Label_normalize = Label(self.master,text="Normalize Depth")
+        self.Label_normalize = Label(self.master,text="Normalize Depth", anchor=E)
         self.Checkbutton_normalize = Checkbutton(self.master,text=" ", anchor=W)
         self.Checkbutton_normalize.configure(variable=self.normalize)
-
-        self.separator1 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
-        self.separator2 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
-        self.separator3 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
-        self.separator4 = Frame(self.master, height=2, bd=1, relief=SUNKEN)
-
-        self.Label_CutTop = Label(self.master,text="Cut Top Surface")
-        self.Checkbutton_CutTop = Checkbutton(self.master,text=" ", \
-                                              anchor=W, command=self.Set_Input_States)
+        self.Label_CutTop = Label(self.master,text="Cut Top Surface", anchor=E)
+        self.Checkbutton_CutTop = Checkbutton(self.master,text=" ", anchor=W, command=self.Set_Input_States)
         self.Checkbutton_CutTop.configure(variable=self.cuttop)
-
-        self.Label_Toptol = Label(self.master,text="Top Tolerance", anchor=CENTER )
+        self.Label_Toptol = Label(self.master,text="Top Tolerance", anchor=E)
         self.Label_Toptol_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_Toptol = Entry(self.master,width="15")
         self.Entry_Toptol.configure(textvariable=self.toptol)
         self.toptol.trace_variable("w", self.Entry_Toptol_Callback)
-        # End Left Column #
 
-        # Right Column #
-        self.Label_tool_opt = Label(self.master,text="Tool Properties:", anchor=W)
-
+        # Right Column 1
+        self.Label_tool_opt = Label(self.master,text="Finish Tool Properties:", anchor=W)
         self.Label_ToolDIA = Label(self.master,text="Tool DIA")
         self.Label_ToolDIA_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_ToolDIA = Entry(self.master,width="15")
         self.Entry_ToolDIA.configure(textvariable=self.dia)
         self.Entry_ToolDIA.bind('<Return>', self.Recalculate_Click)
         self.dia.trace_variable("w", self.Entry_ToolDIA_Callback)
-
-        self.Label_Tool      = Label(self.master,text="Tool End", anchor=CENTER )
-        self.Tool_OptionMenu = OptionMenu(root, self.tool, "Ball","V","Flat",\
-                                               command=self.Set_Input_States_Event)
-
-        self.Label_Vangle = Label(self.master,text="V-Bit Angle", anchor=CENTER )
+        self.Label_Tool      = Label(self.master,text="Tool End", anchor=E)
+        self.Tool_OptionMenu = OptionMenu(root, self.tool, "Ball","V","Flat", command=self.Set_Input_States_Event)
+        self.Label_Vangle = Label(self.master,text="V-Bit Angle", anchor=E)
         self.Entry_Vangle = Entry(self.master,width="15")
         self.Entry_Vangle.configure(textvariable=self.v_angle)
         self.Entry_Vangle.bind('<Return>', self.Recalculate_Click)
         self.v_angle.trace_variable("w", self.Entry_Vangle_Callback)
-
-        self.Label_gcode_opt = Label(self.master,text="Gcode Properties:", anchor=W)
-
-        self.Label_Scanpat      = Label(self.master,text="Scan Pattern", anchor=CENTER )
-        self.ScanPat_OptionMenu = OptionMenu(root, self.scanpat, "Rows","Columns",\
-                                            "R then C", "C then R")
-
+        self.Label_gcode_opt = Label(self.master,text="Finish Gcode Properties:", anchor=W)
+        self.Label_Scanpat      = Label(self.master,text="Scan Pattern", anchor=E)
+        self.ScanPat_OptionMenu = OptionMenu(root, self.scanpat, "Rows","Columns", "R then C", "C then R")
         self.Label_CutPerim = Label(self.master,text="Cut Perimeter")
-        self.Checkbutton_CutPerim = Checkbutton(self.master,text=" ", \
-                                              anchor=W, command=self.Set_Input_States)
+        self.Checkbutton_CutPerim = Checkbutton(self.master,text=" ", anchor=W, command=self.Set_Input_States)
         self.Checkbutton_CutPerim.configure(variable=self.cutperim)
-
-        self.Label_Scandir      = Label(self.master,text="Scan Direction", anchor=CENTER )
-        self.ScanDir_OptionMenu = OptionMenu(root, self.scandir, "Alternating", "Positive",
-                                            "Negative", "Up Mill", "Down Mill")
-
-        self.Label_Feed = Label(self.master,text="Feed Rate")
+        self.Label_Scandir      = Label(self.master,text="Scan Direction", anchor=E)
+        self.ScanDir_OptionMenu = OptionMenu(root, self.scandir, "Alternating", "Positive", "Negative", "Up Mill", "Down Mill")
+        self.Label_Feed = Label(self.master,text="Feed Rate", anchor=E)
         self.Label_Feed_u = Label(self.master,textvariable=self.funits, anchor=W)
         self.Entry_Feed = Entry(self.master,width="15")
         self.Entry_Feed.configure(textvariable=self.f_feed)
         self.Entry_Feed.bind('<Return>', self.Recalculate_Click)
         self.f_feed.trace_variable("w", self.Entry_Feed_Callback)
-
-        self.Label_p_feed = Label(self.master,text="Plunge Feed", anchor=CENTER )
+        self.Label_p_feed = Label(self.master,text="Plunge Feed", anchor=E)
         self.Label_p_feed_u = Label(self.master,textvariable=self.funits, anchor=W)
         self.Entry_p_feed = Entry(self.master,width="15")
         self.Entry_p_feed.configure(textvariable=self.p_feed)
         self.Entry_p_feed.bind('<Return>', self.Recalculate_Click)
         self.p_feed.trace_variable("w", self.Entry_p_feed_Callback)
-
-        self.Label_StepOver = Label(self.master,text="Stepover", anchor=CENTER )
+        self.Label_StepOver = Label(self.master,text="Stepover", anchor=E)
         self.Label_StepOver_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_StepOver = Entry(self.master,width="15")
         self.Entry_StepOver.configure(textvariable=self.stepover)
         self.Entry_StepOver.bind('<Return>', self.Recalculate_Click)
         self.stepover.trace_variable("w", self.Entry_StepOver_Callback)
-
-        self.Label_Zsafe = Label(self.master,text="Z Safe")
+        self.Label_Zsafe = Label(self.master,text="Z Safe", anchor=E)
         self.Label_Zsafe_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_Zsafe = Entry(self.master,width="15")
         self.Entry_Zsafe.configure(textvariable=self.z_safe)
         self.Entry_Zsafe.bind('<Return>', self.Recalculate_Click)
         self.z_safe.trace_variable("w", self.Entry_Zsafe_Callback)
-
-        self.Label_Zcut = Label(self.master,text="Max Cut Depth")
+        self.Label_Zcut = Label(self.master,text="Max Cut Depth", anchor=E)
         self.Label_Zcut_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_Zcut = Entry(self.master,width="15")
         self.Entry_Zcut.configure(textvariable=self.z_cut)
         self.Entry_Zcut.bind('<Return>', self.Recalculate_Click)
         self.z_cut.trace_variable("w", self.Entry_Zcut_Callback)
-        # End Right Column #
 
-        #GEN Setting Window Entry initializations
+        # Right Column 2
+        self.ROUGH_Label_tool_opt = Label(self.master,text="Roughing Tool Properties:", anchor=W)
+        self.ROUGH_Label_ToolDIA = Label(self.master,text="Tool DIA")
+        self.ROUGH_Label_ToolDIA_u = Label(self.master,textvariable=self.units, anchor=W)
+        self.ROUGH_Entry_ToolDIA = Entry(self.master,width="15")
+        self.ROUGH_Entry_ToolDIA.configure(textvariable=self.ROUGH_DIA)
+        self.ROUGH_Entry_ToolDIA.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_DIA.trace_variable("w", self.ROUGH_Entry_ToolDIA_Callback)
+        self.ROUGH_Label_Tool  = Label(self.master,text="Tool End", anchor=E)
+        self.ROUGH_Tool_OptionMenu = OptionMenu(self.master, self.ROUGH_TOOL, "Ball","V","Flat", command=self.Set_Input_States_Event_ROUGH)
+        self.ROUGH_Label_Vangle = Label(self.master,text="V-Bit Angle", anchor=E)
+        self.ROUGH_Entry_Vangle = Entry(self.master,width="15")
+        self.ROUGH_Entry_Vangle.configure(textvariable=self.ROUGH_V_ANGLE)
+        self.ROUGH_Entry_Vangle.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_V_ANGLE.trace_variable("w", self.ROUGH_Entry_Vangle_Callback)
+        self.ROUGH_Label_gcode_opt = Label(self.master,text="Roughing Gcode Properties:", anchor=W)
+        self.ROUGH_Label_Scanpat      = Label(self.master,text="Scan Pattern", anchor=E)
+        self.ROUGH_ScanPat_OptionMenu = OptionMenu(self.master, self.ROUGH_SCANPAT, "Rows","Columns", "R then C", "C then R")
+        self.ROUGH_Label_CutPerim = Label(self.master,text="Cut Perimeter")
+        self.ROUGH_Checkbutton_CutPerim = Checkbutton(self.master,text=" ", anchor=W, command=self.Set_Input_States)
+        self.ROUGH_Checkbutton_CutPerim.configure(variable=self.ROUGH_CUTPERIM)
+        self.ROUGH_Label_Scandir      = Label(self.master,text="Scan Direction", anchor=E)
+        self.ROUGH_ScanDir_OptionMenu = OptionMenu(self.master, self.ROUGH_SCANDIR, "Alternating", "Positive", "Negative", "Up Mill", "Down Mill")
+        self.ROUGH_Label_Feed = Label(self.master,text="Feed Rate", anchor=E)
+        self.ROUGH_Label_Feed_u = Label(self.master,textvariable=self.funits, anchor=W)
+        self.ROUGH_Entry_Feed = Entry(self.master,width="15")
+        self.ROUGH_Entry_Feed.configure(textvariable=self.ROUGH_R_FEED)
+        self.ROUGH_Entry_Feed.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_R_FEED.trace_variable("w", self.ROUGH_Entry_Feed_Callback)
+        self.ROUGH_Label_p_feed = Label(self.master,text="Plunge Feed", anchor=E)
+        self.ROUGH_Label_p_feed_u = Label(self.master,textvariable=self.funits, anchor=W)
+        self.ROUGH_Entry_p_feed = Entry(self.master,width="15")
+        self.ROUGH_Entry_p_feed.configure(textvariable=self.ROUGH_P_FEED)
+        self.ROUGH_Entry_p_feed.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_P_FEED.trace_variable("w", self.Entry_p_feed_Callback)
+        self.ROUGH_Label_StepOver = Label(self.master,text="Stepover", anchor=E)
+        self.ROUGH_Label_StepOver_u = Label(self.master,textvariable=self.units, anchor=W)
+        self.ROUGH_Entry_StepOver = Entry(self.master,width="15")
+        self.ROUGH_Entry_StepOver.configure(textvariable=self.ROUGH_STEPOVER)
+        self.ROUGH_Entry_StepOver.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_STEPOVER.trace_variable("w", self.ROUGH_Entry_StepOver_Callback)
+        self.ROUGH_Label_Roffset = Label(self.master,text="Offset", anchor=E)
+        self.ROUGH_Label_Roffset_u = Label(self.master,textvariable=self.units, anchor=W)
+        self.ROUGH_Entry_Roffset = Entry(self.master,width="15")
+        self.ROUGH_Entry_Roffset.configure(textvariable=self.ROUGH_OFFSET)
+        self.ROUGH_Entry_Roffset.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_OFFSET.trace_variable("w", self.ROUGH_Entry_Roffset_Callback)
+        self.ROUGH_Label_Rdepth = Label(self.master,text="Depth Per Pass", anchor=E)
+        self.ROUGH_Label_Rdepth_u = Label(self.master,textvariable=self.units, anchor=W)
+        self.ROUGH_Entry_Rdepth = Entry(self.master,width="15")
+        self.ROUGH_Entry_Rdepth.configure(textvariable=self.ROUGH_DEPTH_PP)
+        self.ROUGH_Entry_Rdepth.bind('<Return>', self.Recalculate_Click)
+        self.ROUGH_DEPTH_PP.trace_variable("w", self.ROUGH_Entry_Rdepth_Callback)
+
+        # Settings Window Entry initializations
         self.Entry_Sspeed=Entry()
         self.Entry_BoxGap = Entry()
         self.Entry_ContAngle = Entry()
         self.Entry_Tolerance = Entry()
 
-        #ROUGH Setting Window Entry initializations
-        self.ROUGH_Entry_ToolDIA=Entry()
-        self.ROUGH_Entry_Vangle=Entry()
-        self.ROUGH_Entry_Feed=Entry()
-        self.ROUGH_Entry_p_feed=Entry()
-        self.ROUGH_Entry_StepOver=Entry()
-        self.ROUGH_Entry_Roffset=Entry()
-        self.ROUGH_Entry_Rdepth=Entry()
+        # #ROUGH Setting Window Entry initializations
+        # self.ROUGH_Entry_ToolDIA=Entry()
+        # self.ROUGH_Entry_Vangle=Entry()
+        # self.ROUGH_Entry_Feed=Entry()
+        # self.ROUGH_Entry_p_feed=Entry()
+        # self.ROUGH_Entry_StepOver=Entry()
+        # self.ROUGH_Entry_Roffset=Entry()
+        # self.ROUGH_Entry_Rdepth=Entry()
 
-        # Make Menu Bar
+        # Menu Bar
         self.menuBar = Menu(self.master, relief = "raised", bd=2)
-
         top_File = Menu(self.menuBar, tearoff=0)
-        top_File.add("command", label = "Open G-Code File", \
-                         command = self.menu_File_Open_G_Code_File)
-
-        top_File.add("command", label = "Open Image File", \
-                             command = self.menu_File_Open_IMAGE_File)
-
-        top_File.add("command", label = "Save G-Code File", \
-                         command = self.menu_File_Save_G_Code_File_Finish)
-        top_File.add("command", label = "Save Roughing G-Code File", \
-                         command = self.menu_File_Save_G_Code_File_Rough)
+        top_File.add("command", label = "Open G-Code File", command = self.menu_File_Open_G_Code_File)
+        top_File.add("command", label = "Open Image File", command = self.menu_File_Open_IMAGE_File)
+        top_File.add("command", label = "Save Finish G-Code File", command = self.menu_File_Save_G_Code_File_Finish)
+        top_File.add("command", label = "Save Roughing G-Code File", command = self.menu_File_Save_G_Code_File_Rough)
         if IN_AXIS:
-            top_File.add("command", label = "Write To Axis and Exit", \
-                             command = self.WriteToAxis)
+            top_File.add("command", label = "Write To Axis and Exit", command = self.WriteToAxis)
         else:
             top_File.add("command", label = "Exit", command = self.menu_File_Quit)
         self.menuBar.add("cascade", label="File", menu=top_File)
-
         top_Edit = Menu(self.menuBar, tearoff=0)
-        top_Edit.add("command", label = "Copy G-Code Data to Clipboard", \
-                         command = self.CopyClipboard_GCode)
+        top_Edit.add("command", label = "Copy G-Code Data to Clipboard", command = self.CopyClipboard_GCode)
         self.menuBar.add("cascade", label="Edit", menu=top_Edit)
-
         top_View = Menu(self.menuBar, tearoff=0)
         top_View.add("command", label = "Refresh", command = self.menu_View_Refresh)
-
         top_View.add_separator()
-
-        top_View.add_checkbutton(label = "Show Origin Axis",  variable=self.show_axis , \
-                                     command= self.menu_View_Refresh)
-
+        top_View.add_checkbutton(label = "Show Origin Axis",  variable=self.show_axis , command= self.menu_View_Refresh)
         self.menuBar.add("cascade", label="View", menu=top_View)
-
         top_Settings = Menu(self.menuBar, tearoff=0)
-        top_Settings.add("command", label = "General Settings", \
-                             command = self.GEN_Settings_Window)
-        top_Settings.add("command", label = "Roughing Settings", \
-                             command = self.ROUGH_Settings_Window)
-
+        top_Settings.add("command", label = "General Settings", command = self.GEN_Settings_Window)
         self.menuBar.add("cascade", label="Settings", menu=top_Settings)
-
         top_Help = Menu(self.menuBar, tearoff=0)
         top_Help.add("command", label = "About", command = self.menu_Help_About)
         top_Help.add("command", label = "Help (Web Page)", command = self.menu_Help_Web)
         self.menuBar.add("cascade", label="Help", menu=top_Help)
-
         self.master.config(menu=self.menuBar)
-
-        ##########################################################################
-        #                  Config File and command line options                  #
-        ##########################################################################
-        config_file = "dmap2gcode.ngc"
-        home_config1 = os.path.expanduser("~") + "/" + config_file
-        config_file2 = ".dmap2gcoderc"
-        home_config2 = os.path.expanduser("~") + "/" + config_file2
-        if ( os.path.isfile(config_file) ):
-            self.Open_G_Code_File(config_file)
-        elif ( os.path.isfile(home_config1) ):
-            self.Open_G_Code_File(home_config1)
-        elif ( os.path.isfile(home_config2) ):
-            self.Open_G_Code_File(home_config2)
-
+        '''#######################################################################
+        #                  command line options and config file                  #
+        #######################################################################'''
         opts, args = None, None
         try:
             opts, args = getopt.getopt(sys.argv[1:], "hg:",["help", "gcode_file"])
         except:
-            fmessage('Unable interpret command line options')
+            fmessage('Unable to interpret command line options')
             sys.exit()
         for option, value in opts:
             if option in ('-h','--help'):
@@ -654,10 +508,11 @@ class Application(Frame):
                 sys.exit()
             if option in ('-g','--gcode_file'):
                     self.Open_G_Code_File(value)
+        if (os.path.isfile(self.CONFIG_FILE)):
+            self.Open_G_Code_File(self.CONFIG_FILE)
+        else:
+            self.GEN_Settings_Window()
 
-        ##########################################################################
-
-################################################################################
     def entry_set(self, val2, calc_flag=0, new=0):
         if calc_flag == 0 and new==0:
             try:
@@ -693,31 +548,25 @@ class Application(Frame):
                 val2.configure( bg = 'white' )
             except:
                 pass
-
         elif (calc_flag == 0 or calc_flag == 1) and new==2:
             return 0
         return 1
 
-################################################################################
     def Write_Config_File(self, event):
-        self.WriteGCode(rough_flag=0,config_file=True)
-        config_file = "dmap2gcode.ngc"
-        configname_full = self.HOME_DIR + "/" + config_file
-
+        self.WriteGCode(rough_flag=0, config_file=True)
         win_id=self.grab_current()
-        if ( os.path.isfile(configname_full) ):
-            if not message_ask_ok_cancel("Replace", "Replace Exiting Configuration File?\n"+configname_full):
+        if (os.path.isfile(self.CONFIG_FILE)):
+            if not message_ask_ok_cancel("Replace", "Replace Exiting Configuration File?\n"+self.CONFIG_FILE):
                 try:
                     win_id.withdraw()
                     win_id.deiconify()
                 except:
                     pass
                 return
-
         try:
-            fout = open(configname_full,'w')
+            fout = open(self.CONFIG_FILE,'w')
         except:
-            self.statusMessage.set("Unable to open file for writing: %s" %(configname_full))
+            self.statusMessage.set("Unable to open file for writing: %s" %(self.CONFIG_FILE))
             self.statusbar.configure( bg = 'red' )
             return
         for line in self.gcode:
@@ -726,12 +575,10 @@ class Application(Frame):
             except:
                 fout.write('(skipping line)\n')
         fout.close
-        self.statusMessage.set("Configuration File Saved: %s" %(configname_full))
+        self.statusMessage.set("Configuration File Saved: %s" %(self.CONFIG_FILE))
         self.statusbar.configure( bg = 'white' )
 
-
-    ################################################################################
-    def WriteGCode(self,rough_flag = 0,config_file=False):
+    def WriteGCode(self, rough_flag = 0, config_file=False):
         global Zero
         header = []
         if (self.no_comments.get() != True) or (config_file == True):
@@ -747,8 +594,6 @@ class Application(Frame):
             header.append('(dmap2gcode_set cutperim     %s )' %( int(self.cutperim.get())     ))
             header.append('(dmap2gcode_set disable_arcs %s )' %( int(self.disable_arcs.get()) ))
             header.append('(dmap2gcode_set no_comments  %s )' %( int(self.no_comments.get())  ))
-
-
             # STRING.get()
             header.append('(dmap2gcode_set yscale     %s )'  %( self.yscale.get()         ))
             header.append('(dmap2gcode_set toptol     %s )'  %( self.toptol.get()         ))
@@ -772,7 +617,6 @@ class Application(Frame):
             header.append('(dmap2gcode_set scanpat    \042%s\042 )' %( self.scanpat.get() ))
             header.append('(dmap2gcode_set scandir    \042%s\042 )' %( self.scandir.get() ))
             header.append('(dmap2gcode_set imagefile  \042%s\042 )' %( self.IMAGE_FILE    ))
-
             header.append('(dmap2gcode_set ROUGH_TOOL     %s )'  %( self.ROUGH_TOOL.get()    ))
             header.append('(dmap2gcode_set ROUGH_DIA      %s )'  %( self.ROUGH_DIA.get()     ))
             header.append('(dmap2gcode_set ROUGH_V_ANGLE  %s )'  %( self.ROUGH_V_ANGLE.get() ))
@@ -784,22 +628,15 @@ class Application(Frame):
             header.append('(dmap2gcode_set ROUGH_SCANPAT  \042%s\042 )' %( self.ROUGH_SCANPAT.get() ))
             header.append('(dmap2gcode_set ROUGH_SCANDIR  \042%s\042 )' %( self.ROUGH_SCANDIR.get() ))
             header.append('(dmap2gcode_set ROUGH_CUTPERIM %s )' %( int(self.ROUGH_CUTPERIM.get())     ))
-
             header.append("(=========================================================)")
-
-        if (config_file==True):
+        if (config_file == True):
             self.gcode = []
             self.gcode = header
             return
-
-        #header.append(self.gpre.get())
         for line in self.gpre.get().split('|'):
             header.append(line)
-
         postscript = self.gpost.get()
         postscript = postscript.replace('|', '\n')
-        ######################################
-        ######################################
         pil_format = False
         try:
             test = self.im.width()
@@ -811,10 +648,8 @@ class Application(Frame):
                 self.statusMessage.set("No Image Loaded")
                 self.statusbar.configure( bg = 'red' )
                 return
-
         MAT = Image_Matrix()
         MAT.FromImage(self.im,pil_format)
-
         image_h       =  float(self.yscale.get())
         pixel_size    =  image_h / ( float(MAT.width) - 1.0 )
         image_w       =  pixel_size * ( float(MAT.height) - 1.0 )
@@ -824,12 +659,9 @@ class Application(Frame):
         toptol        =  float(self.toptol.get())
         depth         = -float(self.z_cut.get())
         Cont_Angle    =  float(self.cangle.get())
-
         if rough_flag == 0:
-            ######################################################
             cutperim      =  int(self.cutperim.get())
             tool_type     =  self.tool.get()
-
             tool_diameter =  float(self.dia.get())
             rough_depth   =  0.0
             rough_offset  =  0.0
@@ -837,9 +669,7 @@ class Application(Frame):
             rough_feed    =  float(self.ROUGH_R_FEED.get())
             plunge_feed   =  float(self.p_feed.get())
             step          =  max(1, int(floor( float(self.stepover.get()) / pixel_size)))
-
             edge_offset   = 0
-            ######################################################
             if self.tool.get() == "Flat":
                 TOOL = make_tool_shape(endmill, tool_diameter, pixel_size)
             elif self.tool.get() == "V":
@@ -847,8 +677,6 @@ class Application(Frame):
                 TOOL = make_tool_shape(vee_common(v_angle), tool_diameter, pixel_size)
             else: #"Ball"
                 TOOL = make_tool_shape(ball_tool, tool_diameter, pixel_size)
-            ######################################################
-
             rows = 0
             columns = 0
             columns_first = 0
@@ -858,28 +686,20 @@ class Application(Frame):
                 columns = 1
             if self.scanpat.get() == "C then R":
                 columns_first = 1
-
-            ######################################################
             converter = self.scandir.get()
             lace_bound_val = self.lace_bound.get()
-            ### END FINISH CUT STUFF ###
         else:
-            ######################################################
             cutperim      =  int(self.ROUGH_CUTPERIM.get())
             tool_type     =  self.ROUGH_TOOL.get()
-
             rough_depth   =  float(self.ROUGH_DEPTH_PP.get())
             rough_offset  =  float(self.ROUGH_OFFSET.get())
             tool_diameter =  float(self.ROUGH_DIA.get())
             finish_dia    =  float(self.dia.get())
-
             feed_rate     =  float(self.ROUGH_R_FEED.get())
             rough_feed    =  float(self.ROUGH_R_FEED.get())
             plunge_feed   =  float(self.ROUGH_P_FEED.get())
             step          =  max(1, int(floor( float(self.ROUGH_STEPOVER.get()) / pixel_size)))
-
             edge_offset = max(0, (tool_diameter - finish_dia)/2.0)
-            ######################################################
             if self.ROUGH_TOOL.get() == "Flat":
                 TOOL = make_tool_shape(endmill, tool_diameter, pixel_size, rough_offset)
             elif self.tool.get() == "V":
@@ -887,8 +707,6 @@ class Application(Frame):
                 TOOL = make_tool_shape(vee_common(v_angle), tool_diameter, pixel_size, rough_offset)
             else: #"Ball"
                 TOOL = make_tool_shape(ball_tool, tool_diameter, pixel_size, rough_offset)
-            ######################################################
-
             rows = 0
             columns = 0
             columns_first = 0
@@ -898,44 +716,31 @@ class Application(Frame):
                 columns = 1
             if self.ROUGH_SCANPAT.get() == "C then R":
                 columns_first = 1
-
-            ######################################################
             converter = self.ROUGH_SCANDIR.get()
             lace_bound_val = self.lace_bound.get()
-
-        ### END ROUGHING STUFF ###
         if converter == "Positive":
             conv_index = 0
             #fmessage("Positive")
-
         elif converter == "Negative":
             conv_index = 1
             #fmessage("Negative")
-
         elif converter == "Alternating":
             conv_index = 2
             #fmessage("Alternating")
-
         elif converter == "Up Mill":
             conv_index = 3
             #fmessage("Up Milling")
-
         elif converter == "Down Mill":
             conv_index = 4
             #fmessage("Down Mill")
         else:
             conv_index = 2
             fmessage("Converter Error: Setting to, Alternating")
-
-        ######################################################
         if rows: convert_rows = convert_makers[conv_index]()
         else: convert_rows = None
         if columns: convert_cols = convert_makers[conv_index]()
         else: convert_cols = None
-
-        ######################################################
         if lace_bound_val != "None" and rows and columns:
-
             slope = tan( Cont_Angle*pi/180 )
             if columns_first:
                 convert_rows = Reduce_Scan_Lace(convert_rows, slope, step+1)
@@ -947,31 +752,23 @@ class Application(Frame):
                 else:
                     convert_rows = Reduce_Scan_Lace(convert_rows, slope, step+1)
 
-
-
-
-        ######################################################
-        ###              START COMMON STUFF                ###
-        ######################################################
+        '''###################################################
+        #                start common stuff                  #
+        ###################################################'''
         if self.units.get() == "in":
             units = 'G20'
         else:
             units = 'G21'
-
-        ######################################################
         if self.cuttop.get() != True:
             if rows == 1:
                 convert_rows = Reduce_Scan_Lace_new(convert_rows, toptol, 1)
             if columns == 1:
                 convert_cols = Reduce_Scan_Lace_new(convert_cols, toptol, 1)
-        ######################################################
         disable_arcs = self.disable_arcs.get()
-        ######################################################
-        if self.plungetype.get() == "arc" and (not disable_arcs):
+        if self.plungetype.get() == "arc" and not disable_arcs:
             Entry_cut   = ArcEntryCut(plunge_feed, .125)
         else:
             Entry_cut   = SimpleEntryCut(plunge_feed)
-        ######################################################
         if self.normalize.get():
             pass
             a = MAT.min()
@@ -981,72 +778,61 @@ class Application(Frame):
                 MAT.mult(1./(b-a))
         else:
             MAT.mult(1/255.0)
-
         xoffset = 0
         yoffset = 0
-        ######################################################
         MAT.mult(depth)
 
-        ##########################################
-        #         ORIGIN LOCATING STUFF          #
-        ##########################################
+        '''#######################################
+        #         origin locating stuff          #
+        #######################################'''
         minx = 0
         maxx = image_w
         miny = 0
         maxy = image_h
         midx = (minx + maxx)/2
         midy = (miny + maxy)/2
-
         CASE = str(self.origin.get())
         if     CASE == "Top-Left":
             x_zero = minx
             y_zero = maxy
-        elif   CASE == "Top-Center":
+        elif CASE == "Top-Center":
             x_zero = midx
             y_zero = maxy
-        elif   CASE == "Top-Right":
+        elif  CASE == "Top-Right":
             x_zero = maxx
             y_zero = maxy
         elif   CASE == "Mid-Left":
             x_zero = minx
             y_zero = midy
-        elif   CASE == "Mid-Center":
+        elif CASE == "Mid-Center":
             x_zero = midx
             y_zero = midy
-        elif   CASE == "Mid-Right":
+        elif  CASE == "Mid-Right":
             x_zero = maxx
             y_zero = midy
         elif   CASE == "Bot-Left":
             x_zero = minx
             y_zero = miny
-        elif   CASE == "Bot-Center":
+        elif CASE == "Bot-Center":
             x_zero = midx
             y_zero = miny
-        elif   CASE == "Bot-Right":
+        elif  CASE == "Bot-Right":
             x_zero = maxx
             y_zero = miny
-        elif   CASE == "Arc-Center":
+        elif CASE == "Arc-Center":
             x_zero = 0
             y_zero = 0
         else:          #"Default"
             x_zero = 0
             y_zero = 0
-
         xoffset = xoffset - x_zero
         yoffset = yoffset - y_zero
-
-        ######################################################
         if self.invert.get():
             MAT.mult(-1.0)
         else:
             MAT.minus(depth)
-
-        ######################################################
-
         self.gcode = []
-
         MAT.pad_w_zeros(TOOL)
-
         START_TIME=time()
         self.gcode = convert(self,          \
                              MAT,           \
@@ -1071,9 +857,7 @@ class Application(Frame):
                              postscript,    \
                              edge_offset,   \
                              disable_arcs)
-        ######################################################
 
-    ################################################################################
     def CopyClipboard_GCode(self):
         self.clipboard_clear()
         if (self.Check_All_Variables() > 0):
@@ -1123,15 +907,18 @@ class Application(Frame):
         win_id=self.grab_current()
 
     def Close_Current_Window_Click(self):
+        for m in range(len(self.menuBar.children)):
+            self.menuBar.entryconfig(m, state=NORMAL)
         win_id=self.grab_current()
         win_id.destroy()
 
     def Stop_Click(self, event):
         global STOP_CALC
-        STOP_CALC=1
+        STOP_CALC = True
 
-    # Left Column #
-    #############################
+    '''##########################
+    #        left column        #
+    ##########################'''
     def Entry_Yscale_Check(self):
         try:
             value = float(self.yscale.get())
@@ -1144,9 +931,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_Yscale_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Yscale, self.Entry_Yscale_Check(), new=1)
-    #############################
+
     def Entry_Toptol_Check(self):
         try:
             value = float(self.toptol.get())
@@ -1156,15 +944,13 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_Toptol_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Toptol, self.Entry_Toptol_Check(), new=1)
-    #############################
-    # End Left Column #
-    #############################
 
-    #############################
-    # Start Right Column #
-    #############################
+    '''##########################
+    #       right column        #
+    ##########################'''
     def Entry_ToolDIA_Check(self):
         try:
             value = float(self.dia.get())
@@ -1174,9 +960,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_ToolDIA_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_ToolDIA, self.Entry_ToolDIA_Check(), new=1)
-    #############################
+
     def Entry_Vangle_Check(self):
         try:
             value = float(self.v_angle.get())
@@ -1186,9 +973,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_Vangle_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Vangle, self.Entry_Vangle_Check(), new=1)
-    #############################
+
     def Entry_Feed_Check(self):
         try:
             value = float(self.f_feed.get())
@@ -1198,9 +986,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 1         # Value is a valid number changes do not require recalc
+
     def Entry_Feed_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Feed,self.Entry_Feed_Check(), new=1)
-    #############################
+
     def Entry_p_feed_Check(self):
         try:
             value = float(self.p_feed.get())
@@ -1210,9 +999,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_p_feed_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_p_feed, self.Entry_p_feed_Check(), new=1)
-    #############################
+
     def Entry_StepOver_Check(self):
         try:
             value = float(self.stepover.get())
@@ -1222,9 +1012,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_StepOver_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_StepOver, self.Entry_StepOver_Check(), new=1)
-    #############################
+
     def Entry_Zsafe_Check(self):
         try:
             value = float(self.z_safe.get())
@@ -1234,9 +1025,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 1         # Value is a valid number changes do not require recalc
+
     def Entry_Zsafe_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Zsafe,self.Entry_Zsafe_Check(), new=1)
-    #############################
+
     def Entry_Zcut_Check(self):
         try:
             value = float(self.z_cut.get())
@@ -1246,15 +1038,13 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 1         # Value is a valid number changes do not require recalc
+
     def Entry_Zcut_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Zcut,self.Entry_Zcut_Check(), new=1)
-    #############################
-    # End Right Column #
-    #############################
 
-    #############################
-    # Start ROUGH Setttings     #
-    #############################
+    '''##########################
+    #      rough settings       #
+    ##########################'''
     def ROUGH_Entry_ToolDIA_Check(self):
         try:
             value = float(self.ROUGH_DIA.get())
@@ -1264,9 +1054,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_ToolDIA_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_ToolDIA, self.ROUGH_Entry_ToolDIA_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_Vangle_Check(self):
         try:
             value = float(self.ROUGH_V_ANGLE.get())
@@ -1276,9 +1067,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_Vangle_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_Vangle, self.ROUGH_Entry_Vangle_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_Feed_Check(self):
         try:
             value = float(self.ROUGH_R_FEED.get())
@@ -1288,9 +1080,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 1         # Value is a valid number changes do not require recalc
+
     def ROUGH_Entry_Feed_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_Feed,self.ROUGH_Entry_Feed_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_p_feed_Check(self):
         try:
             value = float(self.ROUGH_P_FEED.get())
@@ -1300,9 +1093,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_p_feed_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_p_feed, self.ROUGH_Entry_p_feed_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_StepOver_Check(self):
         try:
             value = float(self.ROUGH_STEPOVER.get())
@@ -1312,9 +1106,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_StepOver_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_StepOver, self.ROUGH_Entry_StepOver_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_Roffset_Check(self):
         try:
             value = float(self.ROUGH_OFFSET.get())
@@ -1324,9 +1119,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_Roffset_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_Roffset, self.ROUGH_Entry_Roffset_Check(), new=1)
-    #############################
+
     def ROUGH_Entry_Rdepth_Check(self):
         try:
             value = float(self.ROUGH_DEPTH_PP.get())
@@ -1336,13 +1132,14 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def ROUGH_Entry_Rdepth_Callback(self, varName, index, mode):
         self.entry_set(self.ROUGH_Entry_Rdepth, self.ROUGH_Entry_Rdepth_Check(), new=1)
-    #############################
-    # End ROUGH setttings       #
-    #############################
 
-    #############################
+
+    '''##########################
+    #                           #
+    ##########################'''
     def Entry_Tolerance_Check(self):
         try:
             value = float(self.tolerance.get())
@@ -1352,9 +1149,10 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_Tolerance_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_Tolerance,self.Entry_Tolerance_Check(), new=1)
-    #############################
+
     def Entry_ContAngle_Check(self):
         try:
             value = float(self.cangle.get())
@@ -1364,40 +1162,36 @@ class Application(Frame):
         except:
             return 3     # Value not a number
         return 0         # Value is a valid number
+
     def Entry_ContAngle_Callback(self, varName, index, mode):
         self.entry_set(self.Entry_ContAngle,self.Entry_ContAngle_Check(), new=1)
-    #############################
 
-    ##########################################################################
-    ##########################################################################
+    '''##########################
+    #                           #
+    ##########################'''
     def Check_All_Variables(self):
         MAIN_error_cnt= \
         self.entry_set(self.Entry_Yscale, self.Entry_Yscale_Check()    ,2) +\
         self.entry_set(self.Entry_Toptol, self.Entry_Toptol_Check()    ,2) +\
         self.entry_set(self.Entry_ToolDIA, self.Entry_ToolDIA_Check()  ,2) +\
         self.entry_set(self.Entry_Vangle, self.Entry_Vangle_Check()    ,2) +\
-        self.entry_set(self.Entry_Feed,self.Entry_Feed_Check()         ,2) +\
+        self.entry_set(self.Entry_Feed, self.Entry_Feed_Check()         ,2) +\
         self.entry_set(self.Entry_p_feed, self.Entry_p_feed_Check()  ,2)   +\
         self.entry_set(self.Entry_StepOver, self.Entry_StepOver_Check(),2) +\
-        self.entry_set(self.Entry_Zsafe,self.Entry_Zsafe_Check()       ,2) +\
-        self.entry_set(self.Entry_Zcut,self.Entry_Zcut_Check()         ,2)
-
+        self.entry_set(self.Entry_Zsafe, self.Entry_Zsafe_Check()       ,2) +\
+        self.entry_set(self.Entry_Zcut, self.Entry_Zcut_Check()         ,2)
         GEN_error_cnt= \
         self.entry_set(self.Entry_Tolerance,self.Entry_Tolerance_Check(),2) +\
         self.entry_set(self.Entry_ContAngle,self.Entry_ContAngle_Check(),2)
-
         ROUGH_error_cnt= \
         self.entry_set(self.ROUGH_Entry_ToolDIA, self.ROUGH_Entry_ToolDIA_Check()  ,2) +\
         self.entry_set(self.ROUGH_Entry_Vangle, self.ROUGH_Entry_Vangle_Check()    ,2) +\
-        self.entry_set(self.ROUGH_Entry_Feed,self.ROUGH_Entry_Feed_Check()         ,2) +\
+        self.entry_set(self.ROUGH_Entry_Feed, self.ROUGH_Entry_Feed_Check()         ,2) +\
         self.entry_set(self.ROUGH_Entry_p_feed, self.ROUGH_Entry_p_feed_Check()  ,2)   +\
         self.entry_set(self.ROUGH_Entry_StepOver, self.ROUGH_Entry_StepOver_Check(),2) +\
         self.entry_set(self.ROUGH_Entry_Roffset, self.ROUGH_Entry_Roffset_Check()  ,2) +\
         self.entry_set(self.ROUGH_Entry_Rdepth, self.ROUGH_Entry_Rdepth_Check()    ,2)
-
-
         ERROR_cnt = MAIN_error_cnt + GEN_error_cnt + ROUGH_error_cnt
-
         if (ERROR_cnt > 0):
             self.statusbar.configure( bg = 'red' )
         if (GEN_error_cnt > 0):
@@ -1409,7 +1203,6 @@ class Application(Frame):
         if (ROUGH_error_cnt > 0):
             self.statusMessage.set(\
                 " Entry Error Detected: Check Entry Values in Roughing Settigns Window ")
-
         return ERROR_cnt
 
     def Entry_units_var_Callback(self):
@@ -1443,20 +1236,18 @@ class Application(Frame):
     def menu_File_Open_G_Code_File(self):
         init_dir = os.path.dirname(self.NGC_FILE)
         if ( not os.path.isdir(init_dir) ):
-            init_dir = os.path.expanduser("~")
+            init_dir = self.HOME_DIR
         fileselect = askopenfilename(filetypes=[("Gcode Files","*.ngc"),\
                                                 ("TAP File","*.tap"),\
                                                 ("All Files","*")],\
                                                  initialdir=init_dir)
-
         if fileselect != '' and fileselect != ():
             self.Open_G_Code_File(fileselect)
 
     def menu_File_Open_IMAGE_File(self):
         init_dir = os.path.dirname(self.IMAGE_FILE)
         if ( not os.path.isdir(init_dir) ):
-            init_dir = os.path.expanduser("~")
-
+            init_dir = self.HOME_DIR
         if PIL:
             fileselect = askopenfilename(filetypes=[("Image Files", ("*.pgm","*.jpg","*.png","*.gif")),
                                                     ("All Files","*")],\
@@ -1465,7 +1256,6 @@ class Application(Frame):
             fileselect = askopenfilename(filetypes=[("Image Files", ("*.pgm","*.gif")),\
                                                     ("All Files","*.*")],\
                                                     initialdir=init_dir)
-
         if fileselect != '' and fileselect != ():
             self.Read_image_file(fileselect)
             self.Plot_Data()
@@ -1476,7 +1266,6 @@ class Application(Frame):
         except:
             fmessage("Unable to open file: %s" %(filename))
             return
-
         text_codes=[]
         ident = "dmap2gcode_set"
         for line in fin:
@@ -1496,7 +1285,6 @@ class Application(Frame):
                     self.disable_arcs.set(line[line.find("disable_arcs"):].split()[1])
                 elif "no_comments"   in line:
                     self.no_comments.set(line[line.find("no_comments"):].split()[1])
-
                 # STRING.set()
                 elif "yscale"     in line:
                     self.yscale.set(line[line.find("yscale"):].split()[1])
@@ -1532,7 +1320,6 @@ class Application(Frame):
                      self.tolerance.set(line[line.find("tolerance"):].split()[1])
                 elif "splitstep"    in line:
                      self.splitstep.set(line[line.find("splitstep"):].split()[1])
-
                 elif "scanpat"    in line:
                      self.scanpat.set(line[line.find("scanpat"):].split("\042")[1])
                 elif "scandir"    in line:
@@ -1543,7 +1330,6 @@ class Application(Frame):
                      self.gpost.set(line[line.find("gpost"):].split("\042")[1])
                 elif "imagefile"    in line:
                        self.IMAGE_FILE=(line[line.find("imagefile"):].split("\042")[1])
-
                 elif "ROUGH_TOOL"    in line:
                      self.ROUGH_TOOL.set(line[line.find("ROUGH_TOOL"):].split()[1])
                 elif "ROUGH_DIA"    in line:
@@ -1566,33 +1352,24 @@ class Application(Frame):
                      self.ROUGH_SCANDIR.set(line[line.find("ROUGH_SCANDIR"):].split("\042")[1])
                 elif "ROUGH_CUTPERIM"  in line:
                     self.ROUGH_CUTPERIM.set(line[line.find("ROUGH_CUTPERIM"):].split()[1])
-
-
-
         fin.close()
-
-        fileName, fileExtension = os.path.splitext(self.IMAGE_FILE)
-        init_file=os.path.basename(fileName)
+        fileName, fileExt = os.path.splitext(self.IMAGE_FILE)
+        init_file = os.path.basename(fileName)
         if init_file != "None":
             if ( os.path.isfile(self.IMAGE_FILE) ):
                 self.Read_image_file(self.IMAGE_FILE)
             else:
                 self.statusMessage.set("Image file not found: %s " %(self.IMAGE_FILE))
-
         if self.units.get() == 'in':
             self.funits.set('in/min')
         else:
             self.units.set('mm')
             self.funits.set('mm/min')
-
-        temp_name, fileExtension = os.path.splitext(filename)
-        file_base=os.path.basename(temp_name)
-
+        temp_name, fileExt = os.path.splitext(filename)
+        file_base = os.path.basename(temp_name)
         if self.initComplete == 1:
             self.menu_Mode_Change()
             self.NGC_FILE = filename
-
-    ###############################################
 
     def Read_image_file(self,fileselect):
         im = []
@@ -1618,13 +1395,9 @@ class Application(Frame):
                     im = PhotoImage(file=fileselect)
                     self.wim = im.width()
                     self.him = im.height()
-
                 self.aspect_ratio =  float(self.wim-1) / float(self.him-1)
                 self.Xscale.set("%.3f" %( self.aspect_ratio * float(self.yscale.get())) )
                 self.pixsize.set("%.3f" %( float(self.yscale.get()) / (self.him - 1.0) ) )
-
-                ######################################
-                ######################################
                 if PIL:
                     self.im = PIL_im
                     self.SCALE = 1
@@ -1633,10 +1406,7 @@ class Application(Frame):
                     self.ui_TKimage = im
                     self.im = self.ui_TKimage
                     self.SCALE = 1
-
                 self.IMAGE_FILE = fileselect
-
-            #except:
             except Exception as err:
                 print(err)
                 self.statusMessage.set("Unable to Open Image file: %s" %(fileselect))
@@ -1650,8 +1420,9 @@ class Application(Frame):
         array = numpy.uint8(numpy.array(img))
         return Image.fromarray(array)
 
-    ##########################################################################
-    ##########################################################################
+    '''##########################
+    #       menu actions        #
+    ##########################'''
     def menu_File_Save_G_Code_File_Finish(self):
         self.menu_File_Save_G_Code_File(rough_flag = 0)
 
@@ -1667,21 +1438,16 @@ class Application(Frame):
 
     def menu_File_Save_G_Code_File(self,rough_flag = 0):
         global STOP_CALC
-        STOP_CALC = 0
+        STOP_CALC = False
         if (self.Check_All_Variables() > 0):
             return
-
         init_dir = os.path.dirname(self.NGC_FILE)
         if ( not os.path.isdir(init_dir) ):
-            init_dir = os.path.expanduser("~")
-
-        fileName, fileExtension = os.path.splitext(self.NGC_FILE)
+            init_dir = self.HOME_DIR
+        fileName, fileExt = os.path.splitext(self.NGC_FILE)
         init_file=os.path.basename(fileName)
-
-        fileName, fileExtension = os.path.splitext(self.IMAGE_FILE)
+        fileName, fileExt = os.path.splitext(self.IMAGE_FILE)
         init_file=os.path.basename(fileName)
-
-
         init_file = init_file.replace('_rough', '')
         if rough_flag == 1:
             init_file = init_file + "_rough"
@@ -1689,36 +1455,28 @@ class Application(Frame):
                                      filetypes=[("G-Code Files","*.ngc"),("TAP File","*.tap"),("All Files","*")],\
                                      initialdir=init_dir,\
                                      initialfile= init_file )
-
         if filename != '' and filename != ():
             self.NGC_FILE = filename
-
             try:
                 fout = open(filename,'w')
             except:
                 self.statusMessage.set("Unable to open file for writing: %s" %(filename))
                 self.statusbar.configure( bg = 'red' )
                 return
-
             vcalc_status = Toplevel(width=525, height=50)
             # Use grab_set to prevent user input in the main window during calculations
             vcalc_status.grab_set()
-
             self.statusbar2 = Label(vcalc_status, textvariable=self.statusMessage, bd=1, relief=FLAT , height=1)
             self.statusbar2.place(x=130+12+12, y=12, width=350, height=30)
             self.statusMessage.set("Preparing Image Data")
             self.statusbar.configure( bg = 'yellow' )
-
-            STOP_CALC = 0
+            STOP_CALC = False
             self.stop_button = Button(vcalc_status,text="Stop Calculation")
             self.stop_button.place(x=12, y=12, width=130, height=30)
             self.stop_button.bind("<ButtonRelease-1>", self.Stop_Click)
-
             vcalc_status.resizable(0,0)
             vcalc_status.title('Saving File')
             vcalc_status.iconname("dmap2gcode")
-
-
             vcalc_status.update_idletasks()
             self.WriteGCode(rough_flag = rough_flag)
             for line in self.gcode:
@@ -1728,7 +1486,7 @@ class Application(Frame):
                     fmessage("skipping g-code line:" + line + "; may be due to non ASCII character.");
                     pass
             fout.close
-            if STOP_CALC == 0:
+            if not STOP_CALC:
                 self.statusMessage.set("File Saved: %s" %(filename))
                 self.statusbar.configure( bg = 'white' )
             else:
@@ -1739,8 +1497,6 @@ class Application(Frame):
                 vcalc_status.destroy()
             except:
                 pass
-    ##########################################################################
-    ##########################################################################
 
     def menu_File_Quit(self):
         if message_ask_ok_cancel("Exit", "Exiting...."):
@@ -1784,7 +1540,7 @@ class Application(Frame):
         webbrowser.open_new(r"http://www.scorchworks.com/Dmap2gcode/dmap2gcode_doc.html")
 
     def KEY_ESC(self, event):
-        pass #A stop calculation command may go here
+        pass # a stop calculation command may go here
 
     def KEY_F1(self, event):
         self.menu_Help_About()
@@ -1792,8 +1548,8 @@ class Application(Frame):
     def KEY_F2(self, event):
         self.GEN_Settings_Window()
 
-    def KEY_F3(self, event):
-        self.ROUGH_Settings_Window()
+#    def KEY_F3(self, event):
+#        self.ROUGH_Settings_Window()
 
     def KEY_F4(self, event):
         pass
@@ -1824,153 +1580,149 @@ class Application(Frame):
             ###################################################
             self.w=w
             self.h=h
-
             if 0 == 0:
-                # Left Column #
-                w_label=90
+                # left column
+                w_label=110
                 w_entry=60
-                w_units=35
-
+                w_units=26
+                w_radio=75
                 x_label_L=10
-                x_entry_L=x_label_L+w_label+10
+                x_entry_L=x_label_L+w_label+5
                 x_units_L=x_entry_L+w_entry+5
-
                 Yloc=6
-                self.Label_font_prop.place(x=x_label_L, y=Yloc, width=w_label*2, height=21)
+                self.Label_font_prop.place(x=x_label_L, y=Yloc, width=w_label, height=21)
                 Yloc=Yloc+24
                 self.Label_Yscale.place(x=x_label_L, y=Yloc, width=w_label, height=21)
                 self.Label_Yscale_u.place(x=x_units_L, y=Yloc, width=w_units, height=21)
                 self.Entry_Yscale.place(x=x_entry_L, y=Yloc, width=w_entry, height=23)
-
                 Yloc=Yloc+24
                 self.Label_Yscale2.place(x=x_label_L, y=Yloc, width=w_label, height=21)
                 self.Label_Yscale2_u.place(x=x_units_L, y=Yloc, width=w_units, height=21)
                 self.Label_Yscale2_val.place(x=x_entry_L, y=Yloc, width=w_entry, height=21)
-
                 Yloc=Yloc+24
                 self.Label_PixSize.place(x=x_label_L, y=Yloc, width=w_label, height=21)
                 self.Label_PixSize_u.place(x=x_units_L, y=Yloc, width=w_units, height=21)
                 self.Label_PixSize_val.place(x=x_entry_L, y=Yloc, width=w_entry, height=21)
-
                 Yloc=Yloc+24+12
-                self.separator1.place(x=x_label_L, y=Yloc,width=w_label+75+40, height=2)
+                self.separator1.place(x=x_label_L, y=Yloc,width=w_label+w_entry+w_units, height=2)
                 Yloc=Yloc+6
-                self.Label_pos_orient.place(x=x_label_L, y=Yloc, width=w_label*2, height=21)
-
+                self.Label_pos_orient.place(x=x_label_L, y=Yloc, width=w_label, height=21)
                 Yloc=Yloc+24
                 self.Label_Invert_Color_FALSE.place(x=x_label_L, y=Yloc, width=w_label, height=21)
-                self.Radio_Invert_Color_FALSE.place(x=x_entry_L+20, y=Yloc, width=75, height=23)
-
+                self.Radio_Invert_Color_FALSE.place(x=x_entry_L, y=Yloc, width=w_radio, height=23)
                 Yloc=Yloc+24
-                #self.Label_Invert_Color_TRUE.place(x=x_label_L, y=Yloc, width=w_label, height=21)
-                self.Radio_Invert_Color_TRUE.place(x=x_entry_L+20, y=Yloc, width=75, height=23)
-
-
-
+                self.Radio_Invert_Color_TRUE.place(x=x_entry_L, y=Yloc, width=w_radio, height=23)
                 Yloc=Yloc+24
-                self.Label_normalize.place(x=x_label_L, y=Yloc, width=w_label+20, height=21)
-                self.Checkbutton_normalize.place(x=x_entry_L+20, y=Yloc, width=w_entry+20, height=23)
-
+                self.Label_normalize.place(x=x_label_L, y=Yloc, width=w_label, height=21)
+                self.Checkbutton_normalize.place(x=x_entry_L, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24
                 self.Label_Origin.place(x=x_label_L, y=Yloc, width=w_label, height=21)
-                self.Origin_OptionMenu.place(x=x_entry_L, y=Yloc, width=w_entry+40, height=23)
-
+                self.Origin_OptionMenu.place(x=x_entry_L, y=Yloc, width=w_entry+30, height=23)
                 Yloc=Yloc+24+12
-                self.separator2.place(x=x_label_L, y=Yloc,width=w_label+75+40, height=2)
-
+                self.separator2.place(x=x_label_L, y=Yloc,width=w_label+w_entry+w_units, height=2)
                 Yloc=Yloc+6
-                self.Label_CutTop.place(x=x_label_L, y=Yloc, width=w_label+20, height=21)
-                self.Checkbutton_CutTop.place(x=x_entry_L+20, y=Yloc, width=w_entry+20, height=23)
-
+                self.Label_CutTop.place(x=x_label_L, y=Yloc, width=w_label, height=21)
+                self.Checkbutton_CutTop.place(x=x_entry_L, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24
                 self.Label_Toptol.place(x=x_label_L, y=Yloc, width=w_label, height=21)
-                self.Label_Toptol_u.place(x=x_units_L, y=Yloc, width=w_units, height=21)
                 self.Entry_Toptol.place(x=x_entry_L, y=Yloc, width=w_entry, height=23)
-                # End Left Column #
-
-                # Start Right Column
+                self.Label_Toptol_u.place(x=x_units_L, y=Yloc, width=w_units, height=21)
+                # right columns
                 w_label=90
                 w_entry=60
                 w_units=35
-
-                x_label_R=self.w - 220
-                x_entry_R=x_label_R+w_label+10
-                x_units_R=x_entry_R+w_entry+5
-
+                x_label_rc1 = self.w - 440
+                x_entry_rc1 = x_label_rc1 + w_label + 10
+                x_units_rc1 = x_entry_rc1 + w_entry + 5
+                x_label_rc2 = self.w - 220
+                x_entry_rc2 = x_label_rc2 + w_label + 10
+                x_units_rc2 = x_entry_rc2 + w_entry + 5
                 Yloc=6
-                self.Label_tool_opt.place(x=x_label_R, y=Yloc, width=w_label*2, height=21)
-
+                self.Label_tool_opt.place(x=x_label_rc1, y=Yloc, width=w_label*2, height=21)
+                self.ROUGH_Label_tool_opt.place(x=x_label_rc2, y=Yloc, width=w_label*2, height=21)
                 Yloc=Yloc+24
-                self.Label_ToolDIA.place(x=x_label_R,   y=Yloc, width=w_label, height=21)
-                self.Label_ToolDIA_u.place(x=x_units_R, y=Yloc, width=w_units, height=21)
-                self.Entry_ToolDIA.place(x=x_entry_R,   y=Yloc, width=w_entry, height=23)
-
+                self.Label_ToolDIA.place(x=x_label_rc1,   y=Yloc, width=w_label, height=21)
+                self.Label_ToolDIA_u.place(x=x_units_rc1, y=Yloc, width=w_units, height=21)
+                self.Entry_ToolDIA.place(x=x_entry_rc1,   y=Yloc, width=w_entry, height=23)
+                self.ROUGH_Label_ToolDIA.place(x=x_label_rc2,   y=Yloc, width=w_label, height=21)
+                self.ROUGH_Label_ToolDIA_u.place(x=x_units_rc2, y=Yloc, width=w_units, height=21)
+                self.ROUGH_Entry_ToolDIA.place(x=x_entry_rc2,   y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24
-                self.Label_Tool.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Tool_OptionMenu.place(x=x_entry_R, y=Yloc, width=w_entry+40, height=23)
-
+                self.Label_Tool.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Tool_OptionMenu.place(x=x_entry_rc1, y=Yloc, width=w_entry+40, height=23)
+                self.ROUGH_Label_Tool.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Tool_OptionMenu.place(x=x_entry_rc2, y=Yloc, width=w_entry+40, height=23)
                 Yloc=Yloc+24
-                self.Label_Vangle.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Entry_Vangle.place(x=x_entry_R, y=Yloc, width=w_entry, height=23)
-
+                self.Label_Vangle.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Entry_Vangle.place(x=x_entry_rc1, y=Yloc, width=w_entry, height=23)
+                self.ROUGH_Label_Vangle.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Entry_Vangle.place(x=x_entry_rc2, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24+12
-                self.separator3.place(x=x_label_R, y=Yloc,width=w_label+75+40, height=2)
-
+                self.separator3.place(x=x_label_rc1, y=Yloc, width=w_label+75+40, height=2)
+                self.separator5.place(x=x_label_rc2, y=Yloc, width=w_label+75+40, height=2)
                 Yloc=Yloc+6
-                self.Label_gcode_opt.place(x=x_label_R, y=Yloc, width=w_label*2, height=21)
-
+                self.Label_gcode_opt.place(x=x_label_rc1, y=Yloc, width=w_label*2, height=21)
+                self.ROUGH_Label_gcode_opt.place(x=x_label_rc2, y=Yloc, width=w_label*2, height=21)
                 Yloc=Yloc+24
-                self.Label_Scanpat.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.ScanPat_OptionMenu.place(x=x_entry_R, y=Yloc, width=w_entry+40, height=23)
-
+                self.Label_Scanpat.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.ScanPat_OptionMenu.place(x=x_entry_rc1, y=Yloc, width=w_entry+40, height=23)
+                self.ROUGH_Label_Scanpat.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_ScanPat_OptionMenu.place(x=x_entry_rc2, y=Yloc, width=w_entry+40, height=23)
                 Yloc=Yloc+24
-                self.Label_CutPerim.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Checkbutton_CutPerim.place(x=x_entry_R, y=Yloc, width=w_entry+40, height=23)
-
+                self.Label_CutPerim.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Checkbutton_CutPerim.place(x=x_entry_rc1, y=Yloc, width=w_entry+40, height=23)
+                self.ROUGH_Label_CutPerim.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Checkbutton_CutPerim.place(x=x_entry_rc2, y=Yloc, width=w_entry+40, height=23)
                 Yloc=Yloc+24
-                self.Label_Scandir.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.ScanDir_OptionMenu.place(x=x_entry_R, y=Yloc, width=w_entry+40, height=23)
-
+                self.Label_Scandir.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.ScanDir_OptionMenu.place(x=x_entry_rc1, y=Yloc, width=w_entry+40, height=23)
+                self.ROUGH_Label_Scandir.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_ScanDir_OptionMenu.place(x=x_entry_rc2, y=Yloc, width=w_entry+40, height=23)
                 Yloc=Yloc+24
-                self.Entry_Feed.place(  x=x_entry_R, y=Yloc, width=w_entry, height=23)
-                self.Label_Feed.place(  x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Label_Feed_u.place(x=x_units_R, y=Yloc, width=w_units+15, height=21)
-
+                self.Entry_Feed.place(x=x_entry_rc1, y=Yloc, width=w_entry, height=23)
+                self.Label_Feed.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Label_Feed_u.place(x=x_units_rc1, y=Yloc, width=w_units+15, height=21)
+                self.ROUGH_Entry_Feed.place(x=x_entry_rc2, y=Yloc, width=w_entry, height=23)
+                self.ROUGH_Label_Feed.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Label_Feed_u.place(x=x_units_rc2, y=Yloc, width=w_units+15, height=21)
                 Yloc=Yloc+24
-                self.Label_p_feed.place(x=x_label_R,  y=Yloc, width=w_label,   height=21)
-                self.Entry_p_feed.place(x=x_entry_R,  y=Yloc, width=w_entry,   height=23)
-                self.Label_p_feed_u.place(x=x_units_R,y=Yloc, width=w_units+15,height=21)
-
+                self.Label_p_feed.place(x=x_label_rc1,  y=Yloc, width=w_label,   height=21)
+                self.Entry_p_feed.place(x=x_entry_rc1,  y=Yloc, width=w_entry,   height=23)
+                self.Label_p_feed_u.place(x=x_units_rc1,y=Yloc, width=w_units+15,height=21)
+                self.ROUGH_Label_p_feed.place(x=x_label_rc2,  y=Yloc, width=w_label,   height=21)
+                self.ROUGH_Entry_p_feed.place(x=x_entry_rc2,  y=Yloc, width=w_entry,   height=23)
+                self.ROUGH_Label_p_feed_u.place(x=x_units_rc2,y=Yloc, width=w_units+15,height=21)
                 Yloc=Yloc+24
-                self.Label_StepOver.place(x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Label_StepOver_u.place(x=x_units_R, y=Yloc, width=w_units, height=21)
-                self.Entry_StepOver.place(x=x_entry_R, y=Yloc, width=w_entry, height=23)
-
+                self.Label_StepOver.place(x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Label_StepOver_u.place(x=x_units_rc1, y=Yloc, width=w_units, height=21)
+                self.Entry_StepOver.place(x=x_entry_rc1, y=Yloc, width=w_entry, height=23)
+                self.ROUGH_Label_StepOver.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Label_StepOver_u.place(x=x_units_rc2, y=Yloc, width=w_units, height=21)
+                self.ROUGH_Entry_StepOver.place(x=x_entry_rc2, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24
-                self.Entry_Zsafe.place(  x=x_entry_R, y=Yloc, width=w_entry, height=23)
-                self.Label_Zsafe.place(  x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Label_Zsafe_u.place(x=x_units_R, y=Yloc, width=w_units, height=21)
-
-
+                self.Entry_Zsafe.place(  x=x_entry_rc1, y=Yloc, width=w_entry, height=23)
+                self.Label_Zsafe.place(  x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Label_Zsafe_u.place(x=x_units_rc1, y=Yloc, width=w_units, height=21)
+                self.ROUGH_Label_Roffset.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Label_Roffset_u.place(x=x_units_rc2, y=Yloc, width=w_units, height=21)
+                self.ROUGH_Entry_Roffset.place(x=x_entry_rc2, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24
-                self.Label_Zcut.place(  x=x_label_R, y=Yloc, width=w_label, height=21)
-                self.Label_Zcut_u.place(x=x_units_R, y=Yloc, width=w_units, height=21)
-                self.Entry_Zcut.place(  x=x_entry_R, y=Yloc, width=w_entry, height=23)
-
+                self.Label_Zcut.place(  x=x_label_rc1, y=Yloc, width=w_label, height=21)
+                self.Label_Zcut_u.place(x=x_units_rc1, y=Yloc, width=w_units, height=21)
+                self.Entry_Zcut.place(  x=x_entry_rc1, y=Yloc, width=w_entry, height=23)
+                self.ROUGH_Label_Rdepth.place(x=x_label_rc2, y=Yloc, width=w_label, height=21)
+                self.ROUGH_Label_Rdepth_u.place(x=x_units_rc2, y=Yloc, width=w_units, height=21)
+                self.ROUGH_Entry_Rdepth.place(x=x_entry_rc2, y=Yloc, width=w_entry, height=23)
                 Yloc=Yloc+24+12
-                self.separator4.place(x=x_label_R, y=Yloc,width=w_label+75+40, height=2)
-
-                # Buttons etc.
+                self.separator4.place(x=x_label_rc1, y=Yloc,width=w_label+75+40, height=2)
+                self.separator6.place(x=x_label_rc2, y=Yloc,width=w_label+75+40, height=2)
+                # buttons
                 Yloc=Yloc+12
-                self.Roughing_but.place(x=x_label_R, y=Yloc, width=90+75+40, height=30)
-
-                # Buttons etc.
-                Ybut=self.h-60
-                self.Save_Button.place(x=12, y=Ybut, width=95, height=30)
-
-                self.PreviewCanvas.configure( width = self.w-455, height = self.h-50 )
+                self.Save_Button.place(x=x_label_rc1+40, y=Yloc, width=130, height=40)
+                self.ROUGH_Save.place(x=x_label_rc2+40, y=Yloc, width=130, height=40)#, anchor="e")
+                # preview
+                self.PreviewCanvas.configure( width = self.w-675, height = self.h-50 )
                 self.PreviewCanvas_frame.place(x=220, y=10)
-
                 self.Set_Input_States()
             self.Plot_Data()
 
@@ -1984,7 +1736,6 @@ class Application(Frame):
         else:
             self.Label_Vangle.configure(state="normal")
             self.Entry_Vangle.configure(state="normal")
-
         if self.cuttop.get():
             self.Entry_Toptol.configure(state="disabled")
             self.Label_Toptol.configure(state="disabled")
@@ -2004,9 +1755,8 @@ class Application(Frame):
         else:
             self.Label_ContAngle.configure(state="normal")
             self.Entry_ContAngle.configure(state="normal")
-
-        if ( self.scanpat.get().find("R") == -1) or \
-           ( self.scanpat.get().find("C") == -1):
+        if (self.scanpat.get().find("R") == -1) or \
+           (self.scanpat.get().find("C") == -1):
             self.Label_LaceBound.configure(state="disabled")
             self.LaceBound_OptionMenu.configure(state="disabled")
             self.Label_ContAngle.configure(state="disabled")
@@ -2030,20 +1780,17 @@ class Application(Frame):
         self.Set_Input_States_ROUGH()
 
 
-    ##########################################
-    #        CANVAS PLOTTING STUFF           #
-    ##########################################
+    '''#######################################
+    #        canvas plotting stuff           #
+    #######################################'''
     def Plot_Data(self):
         self.PreviewCanvas.delete(ALL)
-
         if (self.Check_All_Variables() > 0):
             return
-
         cszw = int(self.PreviewCanvas.cget("width"))
         cszh = int(self.PreviewCanvas.cget("height"))
         wc = float(cszw/2)
         hc = float(cszh/2)
-
         try:
             test = self.im.size
             self.SCALE = min( float(cszw-20)/float(self.wim), float(cszh-20)/float(self.him))
@@ -2057,20 +1804,17 @@ class Application(Frame):
             self.ui_TKimage = ImageTk.PhotoImage(self.im.resize((nw,nh), Image.LANCZOS))
         except:
             self.SCALE = 1
-
         self.canvas_image = self.PreviewCanvas.create_image(wc, \
                             hc, anchor=CENTER, image=self.ui_TKimage)
-
         midx = 0
         midy = 0
         minx = int(self.wim/2)
         miny = int(self.him/2)
         maxx = -minx
         maxy = -miny
-
-        ##########################################
-        #         ORIGIN LOCATING STUFF          #
-        ##########################################
+        '''#######################################
+        #         origin locating stuff          #
+        #######################################'''
         CASE = str(self.origin.get())
         if     CASE == "Top-Left":
             x_zero = minx
@@ -2102,15 +1846,12 @@ class Application(Frame):
         else:          #"Default"
             x_zero = minx
             y_zero = miny
-
         axis_length = int(self.wim/4)
-
         PlotScale =  self.SCALE
         axis_x1 =  cszw/2 + (-x_zero             ) * PlotScale
         axis_x2 =  cszw/2 + ( axis_length-x_zero ) * PlotScale
         axis_y1 =  cszh/2 - (-y_zero             ) * PlotScale
         axis_y2 =  cszh/2 - ( axis_length-y_zero ) * PlotScale
-
         for seg in self.segID:
             self.PreviewCanvas.delete(seg)
         self.segID = []
@@ -2123,354 +1864,140 @@ class Application(Frame):
                                                                   axis_x1,axis_y2,\
                                                                   fill = 'green', width = 2))
 
-    ################################################################################
-    #                         General Settings Window                              #
-    ################################################################################
+    '''###############################################
+    #            general settings window             #
+    ###############################################'''
     def GEN_Settings_Window(self):
-        gen_settings = Toplevel(width=560, height=360)
-        gen_settings.grab_set() # Use grab_set to prevent user input in the main window during calculations
-        gen_settings.resizable(0,0)
-        gen_settings.title('Settings')
-        gen_settings.iconname("Settings")
-
+        self.gen_settings = Toplevel(width=560, height=360)
+        self.gen_settings.resizable(0,0)
+        self.gen_settings.title('Settings')
+        self.gen_settings.iconname("Settings")
+        self.gen_settings.wm_attributes("-topmost", True)
+        for m in range(len(self.menuBar.children)):
+            self.menuBar.entryconfig(m, state=DISABLED)
         D_Yloc  = 6
         D_dY = 24
         xd_label_L = 12
-
-        w_label=110
+        w_label=140
         w_entry=60
         w_units=35
+        w_radio=75
         xd_entry_L=xd_label_L+w_label+10
         xd_units_L=xd_entry_L+w_entry+5
-
-        #Radio Button
+        xd_radio2 = xd_entry_L+w_radio+20
+        xd_radio3 = xd_radio2+w_radio+20
         D_Yloc=D_Yloc+D_dY
-        self.Label_Units = Label(gen_settings,text="Units")
-        self.Label_Units.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
-        self.Radio_Units_IN = Radiobutton(gen_settings,text="inch", value="in",
-                                         width="100", anchor=W)
-        self.Radio_Units_IN.place(x=w_label+22, y=D_Yloc, width=75, height=23)
-        self.Radio_Units_IN.configure(variable=self.units, command=self.Entry_units_var_Callback )
-        self.Radio_Units_MM = Radiobutton(gen_settings,text="mm", value="mm",
-                                         width="100", anchor=W)
-        self.Radio_Units_MM.place(x=w_label+110, y=D_Yloc, width=75, height=23)
+        self.Label_Units = Label(self.gen_settings,text="Units", anchor=E)
+        self.Label_Units.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
+        self.Radio_Units_MM = Radiobutton(self.gen_settings,text="mm", value="mm", width="100", anchor=W)
+        self.Radio_Units_MM.place(x=xd_entry_L, y=D_Yloc, width=w_radio, height=23)
         self.Radio_Units_MM.configure(variable=self.units, command=self.Entry_units_var_Callback )
-
+        self.Radio_Units_IN = Radiobutton(self.gen_settings,text="inch", value="in", width="100", anchor=W)
+        self.Radio_Units_IN.place(x=xd_radio2, y=D_Yloc, width=w_radio, height=23)
+        self.Radio_Units_IN.configure(variable=self.units, command=self.Entry_units_var_Callback )
         D_Yloc=D_Yloc+D_dY
-        self.Label_Tolerance = Label(gen_settings,text="tolerance")
+        self.Label_Tolerance = Label(self.gen_settings,text="Tolerance", anchor=E)
         self.Label_Tolerance.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.Label_Tolerance_u = Label(gen_settings,textvariable=self.units, anchor=W)
+        self.Label_Tolerance_u = Label(self.gen_settings,textvariable=self.units, anchor=W)
         self.Label_Tolerance_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.Entry_Tolerance = Entry(gen_settings,width="15")
+        self.Entry_Tolerance = Entry(self.gen_settings,width="15")
         self.Entry_Tolerance.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
         self.Entry_Tolerance.configure(textvariable=self.tolerance)
         self.tolerance.trace_variable("w", self.Entry_Tolerance_Callback)
         self.entry_set(self.Entry_Tolerance,self.Entry_Tolerance_Check(),2)
-
         D_Yloc=D_Yloc+D_dY
-        self.Label_Gpre = Label(gen_settings,text="G Code Header")
+        self.Label_Gpre = Label(self.gen_settings,text="G Code Header", anchor=E)
         self.Label_Gpre.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.Entry_Gpre = Entry(gen_settings,width="15")
+        self.Entry_Gpre = Entry(self.gen_settings,width="15")
         self.Entry_Gpre.place(x=xd_entry_L, y=D_Yloc, width=300, height=23)
         self.Entry_Gpre.configure(textvariable=self.gpre)
-
         D_Yloc=D_Yloc+D_dY
-        self.Label_Gpost = Label(gen_settings,text="G Code Postscript")
+        self.Label_Gpost = Label(self.gen_settings,text="G Code Postscript", anchor=E)
         self.Label_Gpost.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.Entry_Gpost = Entry(gen_settings)
+        self.Entry_Gpost = Entry(self.gen_settings)
         self.Entry_Gpost.place(x=xd_entry_L, y=D_Yloc, width=300, height=23)
         self.Entry_Gpost.configure(textvariable=self.gpost)
-
         D_Yloc=D_Yloc+D_dY
-        self.Label_LaceBound = Label(gen_settings,text="Lace Bounding")
+        self.Label_LaceBound = Label(self.gen_settings,text="Lace Bounding", anchor=E)
         self.Label_LaceBound.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.LaceBound_OptionMenu = OptionMenu(gen_settings, self.lace_bound, "None","Secondary","Full",\
-                                               command=self.Set_Input_States_GEN_Event)
+        self.LaceBound_OptionMenu = OptionMenu(self.gen_settings, self.lace_bound, "None","Secondary","Full", command=self.Set_Input_States_GEN_Event)
         self.LaceBound_OptionMenu.place(x=xd_entry_L, y=D_Yloc, width=w_entry+40, height=23)
-
         D_Yloc=D_Yloc+D_dY
-        self.Label_ContAngle = Label(gen_settings,text="LB Contact Angle")
+        self.Label_ContAngle = Label(self.gen_settings,text="LB Contact Angle", anchor=E)
         self.Label_ContAngle.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.Label_ContAngle_u = Label(gen_settings,text="deg", anchor=W)
+        self.Label_ContAngle_u = Label(self.gen_settings,text="deg", anchor=W)
         self.Label_ContAngle_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.Entry_ContAngle = Entry(gen_settings,width="15")
+        self.Entry_ContAngle = Entry(self.gen_settings,width="15")
         self.Entry_ContAngle.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
         self.Entry_ContAngle.configure(textvariable=self.cangle)
         self.cangle.trace_variable("w", self.Entry_ContAngle_Callback)
         self.entry_set(self.Entry_ContAngle,self.Entry_ContAngle_Check(),2)
-
-        #Radio Button
         D_Yloc=D_Yloc+D_dY
-        self.Label_SplitStep = Label(gen_settings,text="Offset Stepover")
-        self.Label_SplitStep.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
-
-
-        self.Radio_SplitStep_N = Radiobutton(gen_settings,text="None", value="0",
-                                         width="100", anchor=W)
-        self.Radio_SplitStep_N.place(x=w_label+22, y=D_Yloc, width=75, height=23)
+        self.Label_SplitStep = Label(self.gen_settings,text="Offset Stepover", anchor=E)
+        self.Label_SplitStep.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
+        self.Radio_SplitStep_N = Radiobutton(self.gen_settings,text="None", value="0", width="100", anchor=W)
+        self.Radio_SplitStep_N.place(x=xd_entry_L, y=D_Yloc, width=w_radio, height=23)
         self.Radio_SplitStep_N.configure(variable=self.splitstep )
-
-        self.Radio_SplitStep_H = Radiobutton(gen_settings,text="1/2 Step", value="0.5",
-                                         width="100", anchor=W)
-        self.Radio_SplitStep_H.place(x=w_label+110, y=D_Yloc, width=75, height=23)
+        self.Radio_SplitStep_H = Radiobutton(self.gen_settings,text="1/2 Step", value="0.5", width="100", anchor=W)
+        self.Radio_SplitStep_H.place(x=xd_radio2, y=D_Yloc, width=w_radio, height=23)
         self.Radio_SplitStep_H.configure(variable=self.splitstep )
-
-        self.Radio_SplitStep_Q = Radiobutton(gen_settings,text="1/4 Step", value="0.25",
-                                         width="100", anchor=W)
-        self.Radio_SplitStep_Q.place(x=w_label+198, y=D_Yloc, width=75, height=23)
+        self.Radio_SplitStep_Q = Radiobutton(self.gen_settings,text="1/4 Step", value="0.25", width="100", anchor=W)
+        self.Radio_SplitStep_Q.place(x=xd_radio3, y=D_Yloc, width=w_radio, height=23)
         self.Radio_SplitStep_Q.configure(variable=self.splitstep )
-
-
-
-        #Radio Button
         D_Yloc=D_Yloc+D_dY
-        self.Label_PlungeType = Label(gen_settings,text="Plunge Type")
-        self.Label_PlungeType.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
-        self.Radio_PlungeType_S = Radiobutton(gen_settings,text="Vertical", value="simple",
-                                         width="100", anchor=W)
-        self.Radio_PlungeType_S.place(x=w_label+22, y=D_Yloc, width=75, height=23)
+        self.Label_PlungeType = Label(self.gen_settings,text="Plunge Type", anchor=E)
+        self.Label_PlungeType.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
+        self.Radio_PlungeType_S = Radiobutton(self.gen_settings,text="Vertical", value="simple", width="100", anchor=W)
+        self.Radio_PlungeType_S.place(x=xd_entry_L, y=D_Yloc, width=w_radio, height=23)
         self.Radio_PlungeType_S.configure(variable=self.plungetype )
-        self.Radio_PlungeType_A = Radiobutton(gen_settings,text="Arc", value="arc",
-                                         width="100", anchor=W)
-        self.Radio_PlungeType_A.place(x=w_label+110, y=D_Yloc, width=75, height=23)
+        self.Radio_PlungeType_A = Radiobutton(self.gen_settings,text="Arc", value="arc", width="100", anchor=W)
+        self.Radio_PlungeType_A.place(x=xd_radio2, y=D_Yloc, width=w_radio, height=23)
         self.Radio_PlungeType_A.configure(variable=self.plungetype )
-
         D_Yloc=D_Yloc+D_dY
-        self.Label_Disable_Arcs = Label(gen_settings,text="Disable G-Code Arcs")
-        self.Label_Disable_Arcs.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
-        self.Checkbutton_Disable_Arcs = Checkbutton(gen_settings,text=" ", \
-                                              anchor=W, command=self.Set_Input_States)
-        self.Checkbutton_Disable_Arcs.place(x=w_label+22, y=D_Yloc, width=75, height=23)
-
-        self.Label_Disable_Arcs.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
+        self.Label_Disable_Arcs = Label(self.gen_settings,text="Disable G-Code Arcs", anchor=E)
+        self.Label_Disable_Arcs.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
+        self.Checkbutton_Disable_Arcs = Checkbutton(self.gen_settings,text=" ", anchor=W, command=self.Set_Input_States)
         self.Checkbutton_Disable_Arcs.configure(variable=self.disable_arcs)
-
-
+        self.Checkbutton_Disable_Arcs.place(x=xd_entry_L, y=D_Yloc, width=w_radio, height=23)
         D_Yloc=D_Yloc+D_dY
-        self.Label_no_com = Label(gen_settings,text="Suppress Comments")
+        self.Label_no_com = Label(self.gen_settings,text="Suppress Comments", anchor=E)
         self.Label_no_com.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.Checkbutton_no_com = Checkbutton(gen_settings,text="", anchor=W)
-        self.Checkbutton_no_com.place(x=xd_entry_L, y=D_Yloc, width=75, height=23)
+        self.Checkbutton_no_com = Checkbutton(self.gen_settings,text="", anchor=W)
+        self.Checkbutton_no_com.place(x=xd_entry_L, y=D_Yloc, width=w_radio, height=23)
         self.Checkbutton_no_com.configure(variable=self.no_comments)
-
-
         D_Yloc=D_Yloc+D_dY+10
-        self.Label_SaveConfig = Label(gen_settings,text="Configuration File")
-        self.Label_SaveConfig.place(x=xd_label_L, y=D_Yloc, width=113, height=21)
-
-        self.GEN_SaveConfig = Button(gen_settings,text="Save")
+        self.Label_SaveConfig = Label(self.gen_settings,text="Configuration File", anchor=E)
+        self.Label_SaveConfig.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
+        self.GEN_SaveConfig = Button(self.gen_settings,text="Save")
         self.GEN_SaveConfig.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=21, anchor="nw")
         self.GEN_SaveConfig.bind("<ButtonRelease-1>", self.Write_Config_File)
-
-
-        ## Buttons ##
-        gen_settings.update_idletasks()
-        Ybut=int(gen_settings.winfo_height())-30
-        Xbut=int(gen_settings.winfo_width()/2)
-
-        self.GEN_Close = Button(gen_settings,text="Close",command=self.Close_Current_Window_Click)
+        self.gen_settings.update_idletasks()
+        Ybut=int(self.gen_settings.winfo_height())-30
+        Xbut=int(self.gen_settings.winfo_width()/2)
+        self.GEN_Close = Button(self.gen_settings,text="Close",command=self.Close_Current_Window_Click)
         self.GEN_Close.place(x=Xbut, y=Ybut, width=130, height=30, anchor="center")
-
         self.Set_Input_States_GEN()
+        self.gen_settings.grab_set() # Use grab_set to prevent user input in the main window during calculations
 
-    ################################################################################
-    #                        Roughing Settings Window                              #
-    ################################################################################
-    def ROUGH_Settings_Window(self):
-        rough_settings = Toplevel(width=350, height=460)
-        rough_settings.grab_set() # Use grab_set to prevent user input in the main window during calculations
-        rough_settings.resizable(0,0)
-        rough_settings.title('Roughing Settings')
-        rough_settings.iconname("Roughing")
+'''##################################################
+#      author.py   -   A component of linuxcnc      #
+##################################################'''
 
-        self.ROUGH_separator1 = Frame(rough_settings, height=2, bd=1, relief=SUNKEN)
-        self.ROUGH_separator2 = Frame(rough_settings, height=2, bd=1, relief=SUNKEN)
-        self.ROUGH_separator3 = Frame(rough_settings, height=2, bd=1, relief=SUNKEN)
-        self.ROUGH_separator4 = Frame(rough_settings, height=2, bd=1, relief=SUNKEN)
-
-        D_Yloc  = 6
-        D_dY = 24
-        xd_label_L = 12
-
-        w_label=170
-        w_entry=60
-        w_units=35
-        xd_entry_L=xd_label_L+w_label+10
-        xd_units_L=xd_entry_L+w_entry+5
-
-        ######################
-        # Roughing setttings #
-        ######################
-        # Start Right Column
-        D_Yloc=6
-        self.ROUGH_Label_tool_opt = Label(rough_settings,text="Roughing Tool Properties:", anchor=W)
-
-        self.ROUGH_Label_Tool      = Label(rough_settings,text="Roughing Tool End", anchor=CENTER )
-        self.ROUGH_Tool_OptionMenu       = OptionMenu(rough_settings, self.ROUGH_TOOL, "Ball","V","Flat",\
-                                               command=self.Set_Input_States_Event_ROUGH)
-        self.ROUGH_Label_tool_opt.place(x=xd_label_L, y=D_Yloc, width=w_label*2, height=21)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_ToolDIA = Label(rough_settings,text="Roughing Tool DIA")
-        self.ROUGH_Label_ToolDIA_u = Label(rough_settings,textvariable=self.units, anchor=W)
-        self.ROUGH_Entry_ToolDIA = Entry(rough_settings,width="15")
-
-        self.ROUGH_Entry_ToolDIA.configure(textvariable=self.ROUGH_DIA)
-        self.ROUGH_Entry_ToolDIA.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_DIA.trace_variable("w", self.ROUGH_Entry_ToolDIA_Callback)
-        self.ROUGH_Label_ToolDIA.place(x=xd_label_L,   y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Label_ToolDIA_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.ROUGH_Entry_ToolDIA.place(x=xd_entry_L,   y=D_Yloc, width=w_entry, height=23)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Tool.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Tool_OptionMenu.place(x=xd_entry_L, y=D_Yloc, width=w_entry+40, height=23)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Vangle = Label(rough_settings,text="Roughing V-Bit Angle", anchor=CENTER )
-        self.ROUGH_Entry_Vangle = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_Vangle.configure(textvariable=self.ROUGH_V_ANGLE)
-        self.ROUGH_Entry_Vangle.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_V_ANGLE.trace_variable("w", self.ROUGH_Entry_Vangle_Callback)
-        self.ROUGH_Label_Vangle.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Entry_Vangle.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
-
-        D_Yloc=D_Yloc+24+12
-        self.ROUGH_separator3.place(x=xd_label_L, y=D_Yloc,width=w_label+75+40, height=2)
-
-        D_Yloc=D_Yloc+6
-        self.ROUGH_Label_gcode_opt = Label(rough_settings,text="Roughing Gcode Properties:", anchor=W)
-        self.ROUGH_Label_gcode_opt.place(x=xd_label_L, y=D_Yloc, width=w_label*2, height=21)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Scanpat      = Label(rough_settings,text="Roughing Scan Pattern", anchor=CENTER )
-        self.ROUGH_ScanPat_OptionMenu = OptionMenu(rough_settings, self.ROUGH_SCANPAT, "Rows","Columns",\
-                                           "R then C", "C then R")
-        self.ROUGH_Label_Scanpat.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_ScanPat_OptionMenu.place(x=xd_entry_L, y=D_Yloc, width=w_entry+40, height=23)
-
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_CutPerim = Label(rough_settings,text="Rough Cut Perimeter")
-        self.ROUGH_Checkbutton_CutPerim = Checkbutton(rough_settings,text=" ", \
-                                              anchor=W, command=self.Set_Input_States)
-        self.ROUGH_Checkbutton_CutPerim.configure(variable=self.ROUGH_CUTPERIM)
-        self.ROUGH_Label_CutPerim.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Checkbutton_CutPerim.place(x=xd_entry_L, y=D_Yloc, width=w_entry+40, height=23)
-
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Scandir      = Label(rough_settings,text="Roughing Scan Direction", anchor=CENTER )
-        self.ROUGH_ScanDir_OptionMenu = OptionMenu(rough_settings, self.ROUGH_SCANDIR, "Alternating", "Positive",
-                                            "Negative", "Up Mill", "Down Mill")
-        self.ROUGH_Label_Scandir.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_ScanDir_OptionMenu.place(x=xd_entry_L, y=D_Yloc, width=w_entry+40, height=23)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Feed = Label(rough_settings,text="Roughing Feed Rate")
-        self.ROUGH_Label_Feed_u = Label(rough_settings,textvariable=self.funits, anchor=W)
-        self.ROUGH_Entry_Feed = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_Feed.configure(textvariable=self.ROUGH_R_FEED)
-        self.ROUGH_Entry_Feed.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_R_FEED.trace_variable("w", self.ROUGH_Entry_Feed_Callback)
-        self.ROUGH_Entry_Feed.place(  x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
-        self.ROUGH_Label_Feed.place(  x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Label_Feed_u.place(x=xd_units_L, y=D_Yloc, width=w_units+15, height=21)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_p_feed = Label(rough_settings,text="Roughing Plunge Feed", anchor=CENTER )
-        self.ROUGH_Label_p_feed_u = Label(rough_settings,textvariable=self.funits, anchor=W)
-        self.ROUGH_Entry_p_feed = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_p_feed.configure(textvariable=self.ROUGH_P_FEED)
-        self.ROUGH_Entry_p_feed.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_P_FEED.trace_variable("w", self.Entry_p_feed_Callback)
-        self.ROUGH_Label_p_feed.place(x=xd_label_L,  y=D_Yloc, width=w_label,   height=21)
-        self.ROUGH_Entry_p_feed.place(x=xd_entry_L,  y=D_Yloc, width=w_entry,   height=23)
-        self.ROUGH_Label_p_feed_u.place(x=xd_units_L,y=D_Yloc, width=w_units+15,height=21)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_StepOver = Label(rough_settings,text="Roughing Stepover", anchor=CENTER )
-        self.ROUGH_Label_StepOver_u = Label(rough_settings,textvariable=self.units, anchor=W)
-        self.ROUGH_Entry_StepOver = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_StepOver.configure(textvariable=self.ROUGH_STEPOVER)
-        self.ROUGH_Entry_StepOver.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_STEPOVER.trace_variable("w", self.ROUGH_Entry_StepOver_Callback)
-        self.ROUGH_Label_StepOver.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Label_StepOver_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.ROUGH_Entry_StepOver.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
-
-        D_Yloc=D_Yloc+24+12
-        self.ROUGH_separator4.place(x=xd_label_L, y=D_Yloc,width=w_label+75+40, height=2)
-
-        D_Yloc=D_Yloc+6
-        self.ROUGH_Label_roughing_props = Label(rough_settings,text="Roughing Properties:",anchor=W)
-        self.ROUGH_Label_roughing_props.place(x=xd_label_L, y=D_Yloc, width=w_label*2, height=21)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Roffset = Label(rough_settings,text="Roughing Offset", anchor=CENTER )
-        self.ROUGH_Label_Roffset_u = Label(rough_settings,textvariable=self.units, anchor=W)
-        self.ROUGH_Entry_Roffset = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_Roffset.configure(textvariable=self.ROUGH_OFFSET)
-        self.ROUGH_Entry_Roffset.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_OFFSET.trace_variable("w", self.ROUGH_Entry_Roffset_Callback)
-        self.ROUGH_Label_Roffset.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Label_Roffset_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.ROUGH_Entry_Roffset.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
-
-        D_Yloc=D_Yloc+24
-        self.ROUGH_Label_Rdepth = Label(rough_settings,text="Roughing Depth/Pass", anchor=CENTER )
-        self.ROUGH_Label_Rdepth_u = Label(rough_settings,textvariable=self.units, anchor=W)
-        self.ROUGH_Entry_Rdepth = Entry(rough_settings,width="15")
-        self.ROUGH_Entry_Rdepth.configure(textvariable=self.ROUGH_DEPTH_PP)
-        self.ROUGH_Entry_Rdepth.bind('<Return>', self.Recalculate_Click)
-        self.ROUGH_DEPTH_PP.trace_variable("w", self.ROUGH_Entry_Rdepth_Callback)
-        self.ROUGH_Label_Rdepth.place(x=xd_label_L, y=D_Yloc, width=w_label, height=21)
-        self.ROUGH_Label_Rdepth_u.place(x=xd_units_L, y=D_Yloc, width=w_units, height=21)
-        self.ROUGH_Entry_Rdepth.place(x=xd_entry_L, y=D_Yloc, width=w_entry, height=23)
-
-        ##########################
-        # End Roughing Setttings #
-        ##########################
-
-        ## Buttons ##
-        rough_settings.update_idletasks()
-        Ybut=int(rough_settings.winfo_height())-30
-        Xbut=int(rough_settings.winfo_width()/2)
-
-        self.ROUGH_Save = Button(rough_settings,text="Save\nRoughing G-Code",\
-                                 command=self.menu_File_Save_G_Code_File_Rough)
-        self.ROUGH_Save.place(x=Xbut, y=Ybut, width=130, height=40, anchor="e")
-
-        self.ROUGH_Close = Button(rough_settings,text="Close",\
-                                  command=self.Close_Current_Window_Click)
-        self.ROUGH_Close.place(x=Xbut, y=Ybut, width=130, height=40, anchor="w")
-
-        self.Set_Input_States_ROUGH()
-
-################################################################################
-#             Author.py                                                        #
-#             A component of emc2                                              #
-################################################################################
-
-# Compute the 3D distance from the line segment l1..l2 to the point p.
-# (Those are lower case L1 and L2)
+''' Compute the 3D distance from the line segment l1..l2 to the point p.
+    (Those are lower case L1 and L2) '''
 def dist_lseg(l1, l2, p):
     x0, y0, z0 = l1
     xa, ya, za = l2
     xi, yi, zi = p
-
     dx = xa-x0
     dy = ya-y0
     dz = za-z0
     d2 = dx*dx + dy*dy + dz*dz
-
     if d2 == 0: return 0
-
     t = (dx * (xi-x0) + dy * (yi-y0) + dz * (zi-z0)) / d2
     if t < 0: t = 0
     if t > 1: t = 1
     dist2 = (xi - x0 - t*dx)**2 + (yi - y0 - t*dy)**2 + (zi - z0 - t*dz)**2
-
     return dist2 ** .5
 
 def rad1(x1,y1,x2,y2,x3,y3):
@@ -2480,7 +2007,6 @@ def rad1(x1,y1,x2,y2,x3,y3):
     y23 = y2-y3
     x31 = x3-x1
     y31 = y3-y1
-
     den = abs(x12 * y23 - x23 * y12)
     if abs(den) < 1e-5: return MAXINT
     return hypot(float(x12), float(y12)) * hypot(float(x23), float(y23)) * hypot(float(x31), float(y31)) / 2 / den
@@ -2489,20 +2015,28 @@ class Point:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+
     def __str__(self): return "<%f,%f>" % (self.x, self.y)
+
     def __sub__(self, other):
         return Point(self.x - other.x, self.y - other.y)
+
     def __add__(self, other):
         return Point(self.x + other.x, self.y + other.y)
+
     def __mul__(self, other):
         return Point(self.x * other, self.y * other)
     __rmul__ = __mul__
+
     def cross(self, other):
         return self.x * other.y - self.y * other.x
+
     def dot(self, other):
         return self.x * other.x + self.y * other.y
+
     def mag(self):
         return hypot(self.x, self.y)
+
     def mag2(self):
         return self.x**2 + self.y**2
 
@@ -2510,14 +2044,11 @@ def cent1(x1,y1,x2,y2,x3,y3):
     P1 = Point(x1,y1)
     P2 = Point(x2,y2)
     P3 = Point(x3,y3)
-
     den = abs((P1-P2).cross(P2-P3))
     if abs(den) < 1e-5: return MAXINT, MAXINT
-
     alpha = (P2-P3).mag2() * (P1-P2).dot(P1-P3) / 2 / den / den
     beta  = (P1-P3).mag2() * (P2-P1).dot(P2-P3) / 2 / den / den
     gamma = (P1-P2).mag2() * (P3-P1).dot(P3-P2) / 2 / den / den
-
     Pc = alpha * P1 + beta * P2 + gamma * P3
     return Pc.x, Pc.y
 
@@ -2525,18 +2056,15 @@ def arc_center(plane, p1, p2, p3):
     x1, y1, z1 = p1
     x2, y2, z2 = p2
     x3, y3, z3 = p3
-
     if plane == 17: return cent1(x1,y1,x2,y2,x3,y3)
     if plane == 18: return cent1(x1,z1,x2,z2,x3,z3)
     if plane == 19: return cent1(y1,z1,y2,z2,y3,z3)
 
 def arc_rad(plane, P1, P2, P3):
     if plane is None: return MAXINT
-
     x1, y1, z1 = P1
     x2, y2, z2 = P2
     x3, y3, z3 = P3
-
     if plane == 17: return rad1(x1,y1,x2,y2,x3,y3)
     if plane == 18: return rad1(x1,z1,x2,z2,x3,z3)
     if plane == 19: return rad1(y1,z1,y2,z2,y3,z3)
@@ -2558,14 +2086,8 @@ def one_quadrant(plane, c, p1, p2, p3):
         if x < 0: return -1
         return 1
 
-    signs = set((
-        (sign(x1-xc),sign(y1-yc)),
-        (sign(x2-xc),sign(y2-yc)),
-        (sign(x3-xc),sign(y3-yc))
-    ))
-
+    signs = set(((sign(x1-xc),sign(y1-yc)), (sign(x2-xc),sign(y2-yc)), (sign(x3-xc),sign(y3-yc))))
     if len(signs) == 1: return True
-
     if (1,1) in signs:
         signs.discard((1,0))
         signs.discard((0,1))
@@ -2578,7 +2100,6 @@ def one_quadrant(plane, c, p1, p2, p3):
     if (-1,-1) in signs:
         signs.discard((-1,0))
         signs.discard((0,-1))
-
     if len(signs) == 1: return True
 
 def arc_dir(plane, c, p1, p2, p3):
@@ -2586,16 +2107,13 @@ def arc_dir(plane, c, p1, p2, p3):
     x1, y1 = get_pts(plane, p1[0],p1[1],p1[2])
     x2, y2 = get_pts(plane, p2[0],p2[1],p2[2])
     x3, y3 = get_pts(plane, p3[0],p3[1],p3[2])
-
     theta_start = atan2(y1-yc, x1-xc)
     theta_mid = atan2(y2-yc, x2-xc)
     theta_end = atan2(y3-yc, x3-xc)
-
     if theta_mid < theta_start:
         theta_mid = theta_mid + 2 * pi
     while theta_end < theta_mid:
         theta_end = theta_end + 2 * pi
-
     return theta_end < 2 * pi
 
 def arc_fmt(plane, c1, c2, p1):
@@ -2604,32 +2122,30 @@ def arc_fmt(plane, c1, c2, p1):
     if plane == 18: return "I%.4f K%.4f" % (c1-x, c2-z)
     if plane == 19: return "J%.4f K%.4f" % (c1-y, c2-z)
 
-# Perform Douglas-Peucker simplification on the path 'st' with the specified
-# tolerance.  The '_first' argument is for internal use only.
-#
-# The Douglas-Peucker simplification algorithm finds a subset of the input points
-# whose path is never more than 'tolerance' away from the original input path.
-#
-# If 'plane' is specified as 17, 18, or 19, it may find helical arcs in the given
-# plane in addition to lines.  Note that if there is movement in the plane
-# perpendicular to the arc, it will be distorted, so 'plane' should usually
-# be specified only when there is only movement on 2 axes
+'''################################################################################
+# Perform Douglas-Peucker simplification on the path 'st' with the specified      #
+# tolerance.  The '_first' argument is for internal use only.                     #
+#                                                                                 #
+# The Douglas-Peucker simplification algorithm finds a subset of the input points #
+# whose path is never more than 'tolerance' away from the original input path.    #
+#                                                                                 #
+# If 'plane' is specified as 17, 18, or 19, it may find helical arcs in the given #
+# plane in addition to lines.  Note that if there is movement in the plane        #
+# perpendicular to the arc, it will be distorted, so 'plane' should usually       #
+# be specified only when there is only movement on 2 axes                         #
+################################################################################'''
 def douglas(st, tolerance=.001, plane=None, _first=True):
     if len(st) == 1:
         yield "G1", st[0], None
         return
-
     l1 = st[0]
     l2 = st[-1]
-
     worst_dist = 0
     worst = 0
     min_rad = MAXINT
     max_arc = -1
-
     ps = st[0]
     pe = st[-1]
-
     for i, p in enumerate(st):
         if p is l1 or p is l2: continue
         dist = dist_lseg(l1, l2, p)
@@ -2640,7 +2156,6 @@ def douglas(st, tolerance=.001, plane=None, _first=True):
             if rad < min_rad:
                 max_arc = i
                 min_rad = rad
-
     worst_arc_dist = 0
     if min_rad != MAXINT:
         c1, c2 = arc_center(plane, ps, st[max_arc], pe)
@@ -2652,7 +2167,6 @@ def douglas(st, tolerance=.001, plane=None, _first=True):
                 elif plane == 19: dist = abs(hypot(c1-y, c2-z) - min_rad)
                 else: dist = MAXINT
                 if dist > worst_arc_dist: worst_arc_dist = dist
-
                 mx = (x+lx)/2
                 my = (y+ly)/2
                 mz = (z+lz)/2
@@ -2665,7 +2179,6 @@ def douglas(st, tolerance=.001, plane=None, _first=True):
             worst_arc_dist = MAXINT
     else:
         worst_arc_dist = MAXINT
-
     if worst_arc_dist < tolerance and worst_arc_dist < worst_dist:
         ccw = arc_dir(plane, (c1, c2), ps, st[max_arc], pe)
         if plane == 18: ccw = not ccw
@@ -2686,7 +2199,6 @@ def douglas(st, tolerance=.001, plane=None, _first=True):
         if _first: yield "G1", st[0], None
         if _first: yield "G1", st[-1], None
 
-# For creating rs274ngc files
 class Gcode:
     def __init__(self, homeheight = 1.5, safetyheight = 0.04,
                  tolerance=0.001, units="G20", header="", postscript="",
@@ -2713,9 +2225,10 @@ class Gcode:
                 self.plane = p
                 self.write("G%d" % p)
 
-    # This function moves to the safety height, sets many modal codes to default
-    # values, turns the spindle on at 3000RPM
     def begin(self):
+        ''' moves to the safety height
+            sets many modal codes to default values
+            turns the spindle on at 3000RPM '''
         if self.header=="":
             self.write("G17 G90 M3 S3000 G40 G94")
         else:
@@ -2724,22 +2237,11 @@ class Gcode:
         self.write(self.units)
         if not self.disable_arcs:
             self.write("G91.1")
-
-        #self.safety()
-        #self.rapid(z=self.safetyheight)
         self.write("G0 Z%.4f" % (self.safetyheight))
-        #["G17 G40","G80 G90 G94 G91.1"]
 
-    # If any 'cut' moves are stored up, send them to the simplification algorithm
-    # and actually output them.
-    #
-    # This function is usually used internally (e.g., when changing from a cut
-    # to a rapid) but can be called manually as well.  For instance, when
-    # a contouring program reaches the end of a row, it may be desirable to enforce
-    # that the last 'cut' coordinate is actually in the output file, and it may
-    # give better performance because this means that the simplification algorithm
-    # will examine fewer points per run.
     def flush(self):
+        ''' if any 'cut' moves are stored up, send them to the
+            simplification algorithm and actually output them '''
         if not self.cuts: return
         for move, (x, y, z), cent in douglas(self.cuts, self.tolerance, self.plane):
             if cent:
@@ -2753,7 +2255,7 @@ class Gcode:
         self.cuts = []
 
     def end(self):
-        #"""End the program"""
+        ''' end the program '''
         self.flush()
         self.safety()
         if self.postscript=="":
@@ -2761,26 +2263,13 @@ class Gcode:
         else:
             self.write(self.postscript)
 
-    #    """\
-    #Set exact path mode.  Note that unless self.tolerance is set to zero,
-    #the simplification algorithm may still skip over specified points."""
-    #def exactpath(self):
-    #    self.write("G61")
-
-    # Set continuous mode.
-    #def continuous(self, tolerance=0.0):       #commented V0.7
-    #    if tolerance > 0.0:                    #commented V0.7
-    #        self.write("G64 P%.4f" % tolerance)#commented V0.7
-    #    else:                                  #commented V0.7
-    #        self.write("G64")                  #commented V0.7
-
     def rapid(self, x=None, y=None, z=None, a=None):
-        #"Perform a rapid move to the specified coordinates"
+        ''' perform a rapid move to the specified coordinates '''
         self.flush()
         self.move_common(x, y, z, a, "G0")
 
     def move_common(self, x=None, y=None, z=None, a=None, gcode="G0"):
-        #"An internal function used for G0 and G1 moves"
+        ''' an internal function used for G0 and G1 moves '''
         gcodestring = xstring = ystring = zstring = astring = ""
         if x == None: x = self.lastx
         if y == None: y = self.lasty
@@ -2808,12 +2297,12 @@ class Gcode:
             self.write(cmd)
 
     def set_feed(self, feed):
-        #"Set the feed rate to the given value"
+        ''' set the feed rate to the given value '''
         self.flush()
         self.write("F%.4f" % feed)
 
     def cut(self, x=None, y=None, z=None):
-        #"Perform a cutting move at the specified feed rate to the specified coordinates"
+        ''' perform a cutting move at the specified feed rate to the specified coordinates '''
         if self.cuts:
             lastx, lasty, lastz = self.cuts[-1]
         else:
@@ -2824,21 +2313,19 @@ class Gcode:
         self.cuts.append([x,y,z])
 
     def home(self):
-        #"Go to the 'home' height at rapid speed"
+        ''' go to the 'home' height at rapid speed '''
         self.flush()
         self.rapid(z=self.homeheight)
-
     def safety(self):
-        #"Go to the 'safety' height at rapid speed"
+        ''' go to the 'safety' height at rapid speed '''
         self.flush()
         self.rapid(z=self.safetyheight)
 
 
-################################################################################
-#             image-to-gcode                                                   #
-#                                                                              #
-################################################################################
+'''########################
+#     image-to-gcode      #
 
+########################'''
 epsilon = 1e-5
 
 def ball_tool(r,rad):
@@ -2854,30 +2341,27 @@ def vee_common(angle, rough_offset=0.0):
         return r * slope
     return f
 
-def make_tool_shape(f, wdia, resp, rough_offset=0.0):
-    # resp is pixel size
-    res = 1. / resp
+def make_tool_shape(f, wdia, pixel_size, rough_offset=0.0):
+    res = 1. / pixel_size
     wrad = wdia/2.0 + rough_offset
-    rad = int(ceil((wrad-resp/2.0)*res))
+    rad = int(ceil((wrad-pixel_size/2.0)*res))
     if rad < 1: rad = 1
     dia = 2*rad+1
-
     hdia = rad
     l = []
     for x in range(dia):
         for y in range(dia):
-            r = hypot(x-hdia, y-hdia) * resp
+            r = hypot(x-hdia, y-hdia) * pixel_size
             if r < wrad:
                 z = f(r, wrad)
                 l.append(z)
-    #######################
     TOOL = Image_Matrix(dia,dia)
     l = []
     temp = []
     for x in range(dia):
         temp.append([])
         for y in range(dia):
-            r = hypot(x-hdia, y-hdia) * resp
+            r = hypot(x-hdia, y-hdia) * pixel_size
             if r < wrad:
                 z = f(r, wrad)
                 l.append(z)
@@ -3009,7 +2493,6 @@ class Reduce_Scan_Lace:
     def reset(self):
         self.converter.reset()
 
-#############
 class Reduce_Scan_Lace_new:
     def __init__(self, converter, depth, keep):
         self.converter = converter
@@ -3048,7 +2531,6 @@ class Reduce_Scan_Lace_new:
 
     def reset(self):
         self.converter.reset()
-#############
 
 unitcodes = ['G20', 'G21']
 convert_makers = [ Convert_Scan_Increasing, Convert_Scan_Decreasing, Convert_Scan_Alternating, Convert_Scan_Upmill, Convert_Scan_Downmill ]
@@ -3070,12 +2552,9 @@ def progress(a, b, START_TIME, GUI=[]):
             fmessage(message)
 
 class Converter:
-    def __init__(self, BIG, \
-            image, units, tool_shape, pixelsize, pixelstep, safetyheight, tolerance,\
-                 feed, convert_rows, convert_cols, cols_first_flag, border, entry_cut,\
-                 roughing_delta, roughing_feed, xoffset, yoffset, splitstep, header, \
-                 postscript, edge_offset, disable_arcs):
-
+    def __init__(self, BIG, image, units, tool_shape, pixelsize, pixelstep, safetyheight, tolerance, feed, \
+                 convert_rows, convert_cols, cols_first_flag, border, entry_cut, roughing_delta, roughing_feed, \
+                 xoffset, yoffset, splitstep, header, postscript, edge_offset, disable_arcs):
         self.BIG = BIG
         self.image = image
         self.units = units
@@ -3095,25 +2574,18 @@ class Converter:
         self.border = border
         self.edge_offset = edge_offset
         self.disable_arcs = disable_arcs
-
         self.xoffset = xoffset
         self.yoffset = yoffset
-
-        # Split step stuff
         splitpixels = 0
         if splitstep > epsilon:
             pixelstep   = int(floor(pixelstep * splitstep * 2))
             splitpixels = int(floor(pixelstep * splitstep    ))
         self.pixelstep   = pixelstep
         self.splitpixels = splitpixels
-
         self.cache = {}
-
         w, h = self.w, self.h = image.shape
         self.h1 = h
         self.w1 = w
-
-        ### Percent complete stuff ###
         self.START_TIME=time()
         row_cnt=0
         cnt_border = 0
@@ -3134,29 +2606,22 @@ class Converter:
     def one_pass(self):
         g = self.g
         g.set_feed(self.feed)
-
         if self.convert_cols and self.cols_first_flag:
             self.g.set_plane(19)
             self.mill_cols(self.convert_cols, True)
             if self.convert_rows: g.safety()
-
         if self.convert_rows:
             self.g.set_plane(18)
             self.mill_rows(self.convert_rows, not self.cols_first_flag)
-
         if self.convert_cols and not self.cols_first_flag:
             self.g.set_plane(19)
             if self.convert_rows: g.safety()
             self.mill_cols(self.convert_cols, not self.convert_rows)
-
         g.safety()
-
-        ## mill border ##
         if self.convert_cols:
             self.convert_cols.reset()
         if self.convert_rows:
             self.convert_rows.reset()
-
         step_save = self.pixelstep
         self.pixelstep = max(self.w1, self.h1) + 1
         if self.border == 1 and not self.convert_rows:
@@ -3164,19 +2629,16 @@ class Converter:
                 self.g.set_plane(18)
                 self.mill_rows(self.convert_cols, True, border_flag=True)
                 g.safety()
-
         if self.border == 1 and not self.convert_cols:
             if self.convert_rows:
                 self.g.set_plane(19)
                 self.mill_cols(self.convert_rows, True, border_flag=True)
                 g.safety()
         self.pixelstep = step_save 
-
         if self.convert_cols:
             self.convert_cols.reset()
         if self.convert_rows:
             self.convert_rows.reset()
-
         g.safety()
 
     def convert(self):
@@ -3189,11 +2651,9 @@ class Converter:
                            target=lambda s: output_gcode.append(s),
                            disable_arcs = self.disable_arcs)
         g.begin()
-        #g.continuous(self.tolerance) #commented V0.7
         g.safety()
 
         if self.roughing_delta:
-            ##########################################
             self.feed = self.roughing_feed
             r = -self.roughing_delta
             m = self.image.min()
@@ -3204,12 +2664,10 @@ class Converter:
             if r < m + epsilon:
                 self.rd = m
                 self.one_pass()
-            ##########################################
         else:
             self.feed = self.base_feed
             self.rd = self.image.min()
             self.one_pass()
-            ##########################################
         g.end()
         return output_gcode
 
@@ -3250,9 +2708,7 @@ class Converter:
         jrange = self.frange(self.splitpixels+pixel_offset, w1-pixel_offset, pixelstep)
         if jrange[0] != pixel_offset: jrange.insert(0,pixel_offset)
         if w1-1-pixel_offset not in jrange: jrange.append(w1-1-pixel_offset)
-
         irange = range(pixel_offset,h1-pixel_offset)
-
         for j in jrange:
             self.cnt = self.cnt+1
             progress(self.cnt, self.cnt_total, self.START_TIME, self.BIG )
@@ -3272,8 +2728,6 @@ class Converter:
                     self.g.cut(*p[1])
             self.g.flush()
 
-
-
     def mill_cols(self, convert_scan, primary, border_flag=False):
         global STOP_CALC
         w1 = self.w1
@@ -3284,12 +2738,9 @@ class Converter:
         jrange = self.frange(self.splitpixels+pixel_offset, h1-pixel_offset, pixelstep)
         if jrange[0] != pixel_offset: jrange.insert(0,pixel_offset)
         if h1-1-pixel_offset not in jrange: jrange.append(h1-1-pixel_offset)
-
         irange = range(pixel_offset,w1-pixel_offset)
-
         if h1-1-pixel_offset not in jrange: jrange.append(h1-1-pixel_offset)
         jrange.reverse()
-
         for j in jrange:
             self.cnt = self.cnt+1
             progress(self.cnt, self.cnt_total, self.START_TIME, self.BIG )
@@ -3325,9 +2776,9 @@ class SimpleEntryCut:
         if self.feed:
             conv.g.set_feed(conv.feed)
 
-# Calculate the portion of the arc to do so that none is above the
-# safety height (that's just silly)
 def circ(r,b):
+    ''' calculate the portion of the arc to do so that none
+        is above the safety height, that is just silly '''
     z = r**2 - (r-b)**2
     if z < 0: z = 0
     return z**.5
@@ -3347,27 +2798,19 @@ class ArcEntryCut:
             if self.feed:
                 conv.g.set_feed(conv.feed)
             return
-
         p1 = points[0][1]
         p2 = points[1][1]
         z0 = p1[2]
-
         lim = int(ceil(self.max_radius / conv.pixelsize))
         r = range(1, lim)
-
         if self.feed:
             conv.g.set_feed(self.feed)
         conv.g.safety()
-
         x, y, z = p1
-
         pixelsize = conv.pixelsize
-
         cx = cmp(p1[0], p2[0])
         cy = cmp(p1[1], p2[1])
-
         radius = self.max_radius
-
         if cx != 0:
             h1 = conv.h1
             for di in r:
@@ -3386,24 +2829,17 @@ class ArcEntryCut:
                     radius = rad1
                 if dx > radius:
                     break
-
             z1 = min(p1[2] + radius, conv.safetyheight)
-
             x1 = p1[0] + cx * circ(radius, z1 - p1[2])
             conv.g.rapid(x1, p1[1])
             conv.g.cut(z=z1)
-
             I = - cx * circ(radius, z1 - p1[2])
             K = (p1[2] + radius) - z1
-
             conv.g.flush(); conv.g.lastgcode = None
             if cx > 0:
-                #conv.g.write("G3 X%f Z%f R%f" % (p1[0], p1[2], radius)) #G3
                 conv.g.write("G3 X%f Z%f I%f K%f" % (p1[0], p1[2], I, K))
             else:
-                #conv.g.write("G2 X%f Z%f R%f" % (p1[0], p1[2], radius)) #G2
                 conv.g.write("G2 X%f Z%f I%f K%f" % (p1[0], p1[2], I, K))
-
             conv.g.lastx = p1[0]
             conv.g.lasty = p1[1]
             conv.g.lastz = p1[2]
@@ -3422,21 +2858,16 @@ class ArcEntryCut:
                 rad1 = (dy * dy / dz + dz) / 2
                 if rad1 < radius: radius = rad1
                 if dy > radius: break
-
             z1 = min(p1[2] + radius, conv.safetyheight)
             y1 = p1[1] + cy * circ(radius, z1 - p1[2])
             conv.g.rapid(p1[0], y1)
             conv.g.cut(z=z1)
-
             J =  -cy * circ(radius, z1 - p1[2])
             K = (p1[2] + radius) - z1
-
             conv.g.flush(); conv.g.lastgcode = None
             if cy > 0:
-                #conv.g.write("G2 Y%f Z%f R%f" % (p1[1], p1[2], radius)) #G2
                 conv.g.write("G2 Y%f Z%f J%f K%f" % (p1[1], p1[2], J, K))
             else:
-                #conv.g.write("G3 Y%f Z%f R%f" % (p1[1], p1[2], radius)) #G3
                 conv.g.write("G3 Y%f Z%f J%f K%f" % (p1[1], p1[2], J, K))
             conv.g.lastx = p1[0]
             conv.g.lasty = p1[1]
@@ -3444,7 +2875,8 @@ class ArcEntryCut:
         if self.feed:
             conv.g.set_feed(conv.feed)
 
-class Image_Matrix_List: #Nested list (no Numpy)
+class Image_Matrix_List:
+    ''' nested list, no numpy '''
     def __init__(self, width=0, height=0):
         self.width  = width
         self.height = height
@@ -3461,17 +2893,13 @@ class Image_Matrix_List: #Nested list (no Numpy)
         s = len(input_list)
         self.width  = s
         self.height = s
-
         for x in range(s):
             self.api()
             for y in range(s):
                 self.apj(x,float(input_list[x][y]))
 
-
     def FromImage(self, im, pil_format):
-        global STOP_CALC
         self.matrix = []
-
         if pil_format:
             him,wim = im.size
             for i in range(0,wim):
@@ -3479,7 +2907,6 @@ class Image_Matrix_List: #Nested list (no Numpy)
                 for j in range(0,him):
                     pix = im.getpixel((j,i))
                     self.apj(i,pix)
-
         else:
             him = im.width()
             wim = im.height()
@@ -3489,19 +2916,15 @@ class Image_Matrix_List: #Nested list (no Numpy)
                     try:    pix = im.get(j,i).split()
                     except: pix = im.get(j,i)
                     self.apj(i,pix[0])
-
         self.width  = wim
         self.height = him
         self.shape  = [wim, him]
         self.t_offset = 0
 
-
-
     def pad_w_zeros(self,tool):
         ts = tool.width
         for i in range(len(self.matrix),self.width+ts):
             self.api()
-
         for i in range(0,len(self.matrix)):
             for j in range(len(self.matrix[i]),self.height+ts):
                 self.apj(i,-1e1000000)
@@ -3513,7 +2936,6 @@ class Image_Matrix_List: #Nested list (no Numpy)
         ihigh = (int)(x+(ts-1)/2+1)
         jlow  = (int)(y-(ts-1)/2)
         jhigh = (int)(y+(ts-1)/2+1)
-
         icnt = 0
         for i in range( ilow , ihigh):
             jcnt = 0
@@ -3568,7 +2990,6 @@ class Image_Matrix_Numpy:
     def __init__(self, width=2, height=2):
         self.width  = width
         self.height = height
-        #self.matrix = numarray.zeros((width, height), 'Float32')
         self.matrix = numpy.zeros((width, height), 'float32')
         self.shape  = [width, height]
         self.t_offset = 0
@@ -3584,20 +3005,15 @@ class Image_Matrix_Numpy:
         s = len(input_list)
         self.width  = s
         self.height = s
-
-        #self.matrix = numarray.zeros((s, s), 'Float32')
         self.matrix = numpy.zeros((s, s), 'float32')
         for x in range(s):
             for y in range(s):
                 self.matrix[x,y]=float(input_list[x][y])
 
     def FromImage(self, im, pil_format):
-        global STOP_CALC
         self.matrix = []
-
         if pil_format:
             him,wim = im.size
-            #self.matrix = numarray.zeros((wim, him), 'Float32')
             self.matrix = numpy.zeros((wim, him), 'float32')
             for i in range(0,wim):
                 for j in range(0,him):
@@ -3606,14 +3022,12 @@ class Image_Matrix_Numpy:
         else:
             him = im.width()
             wim = im.height()
-            #self.matrix = numarray.zeros((wim, him), 'Float32')
             self.matrix = numpy.zeros((wim, him), 'float32')
             for i in range(0,wim):
                 for j in range(0,him):
                     try:    pix = im.get(j,i).split()
                     except: pix = im.get(j,i)
                     self.matrix[i,j] = float(pix[0])
-
         self.width  = wim
         self.height = him
         self.shape  = [wim, him]
@@ -3623,11 +3037,9 @@ class Image_Matrix_Numpy:
         ts = tool.width
         self.t_offset = int((ts-1)/2) 
         to = self.t_offset
-
         w, h = self.shape
         w1 = w + ts-1
         h1 = h + ts-1
-        #temp = numarray.zeros((w1, h1), 'Float32')
         temp = numpy.zeros((w1, h1), 'float32')
         for j in range(0, w1):
             for i in range(0, h1):
@@ -3644,21 +3056,21 @@ class Image_Matrix_Numpy:
         return d
 
     def min(self):
-        return self.matrix[self.t_offset:self.t_offset+self.width,
-                              self.t_offset:self.t_offset+self.height].min()
+        return self.matrix[self.t_offset:self.t_offset+self.width, self.t_offset:self.t_offset+self.height].min()
+
     def max(self):
-        return self.matrix[self.t_offset:self.t_offset+self.width,
-                              self.t_offset:self.t_offset+self.height].max()
+        return self.matrix[self.t_offset:self.t_offset+self.width, self.t_offset:self.t_offset+self.height].max()
+
     def mult(self,val):
         self.matrix = self.matrix * float(val)
 
     def minus(self,val):
         self.matrix = self.matrix - float(val)
 
-################################################################################
-#             Function for outputting messages to different locations          #
-#            depending on what options are enabled                             #
-################################################################################
+'''#################################################
+#      output messages to different locations      #
+#      depending on what options are enabled       #
+#################################################'''
 def fmessage(text,newline=True):
     global IN_AXIS, QUIET
     if (not IN_AXIS and not QUIET):
@@ -3675,22 +3087,14 @@ def fmessage(text,newline=True):
                 pass
 
 def message_box(title,message):
-    if VERSION == 3:
-        tkinter.messagebox.showinfo(title,message)
-    else:
-        tkMessageBox.showinfo(title,message)
-        pass
+    tkinter.messagebox.showinfo(title, message)
 
 def message_ask_ok_cancel(title, mess):
-    if VERSION == 3:
-        result=tkinter.messagebox.askokcancel(title, mess)
-    else:
-        result=tkMessageBox.askokcancel(title, mess)
-    return result
+    return tkinter.messagebox.askokcancel(title, mess)
 
-################################################################################
-#                          Startup Application                                 #
-################################################################################
+'''##############################
+#      startup application      #
+##############################'''
 if NUMPY == True:
     Image_Matrix = Image_Matrix_Numpy
 else:
@@ -3700,10 +3104,12 @@ root = Tk()
 app = Application(root)
 app.master.title("dmap2gcode V"+version)
 app.master.iconname("dmap2gcode")
-app.master.minsize(780,540)
+app.master.minsize(MIN_SIZE[0], MIN_SIZE[1])
 
 
-################################## Set Icon  ########################################
+'''#####################
+#      scorch icon     #
+#####################'''
 try:
     scorch_ico_B64=b'R0lGODlhEAAQAIYAAA\
     AAABAQEBYWFhcXFxsbGyUlJSYmJikpKSwsLC4uLi8vLzExMTMzMzc3Nzg4ODk5OTs7Oz4+PkJCQkRERE\
@@ -3718,11 +3124,9 @@ try:
     aAWCFDA4EDSQInwaDACBEAImLwCAFARw4HFJJcgGADyZEAL3YQcMGBBpIjHx4EeIGkRoMFJgakWADABx\
     IkPwIgcIGkdm0AMJDo1g3jQBIBRZAINyKAwxEkyHEUSMIcwYYbEgwYmQGgyI8SD5Jo327hgIIAAQ5cBs\
     CQpHySgAA7'
-    icon_im =PhotoImage(data=scorch_ico_B64, format='gif')
+    icon_im = PhotoImage(data=scorch_ico_B64, format='gif')
     root.call('wm', 'iconphoto', root._w, '-default', icon_im)
 except:
     pass
-#####################################################################################
-
 
 root.mainloop()
