@@ -76,7 +76,7 @@ except:
 IN_AXIS   = 'AXIS_PROGRESS_BAR' in os.environ
 QUIET = False # setting to True will stop almost all console messages
 STOP_CALC = False
-MIN_SIZE = [1000, 540]
+MIN_SIZE = [1400, 800]
 MAXINT = sys.maxsize
 
 class Application(Frame):
@@ -360,7 +360,7 @@ class Application(Frame):
         self.Label_CutPerim = Label(self.master,text='Cut Perimeter')
         self.Checkbutton_CutPerim = Checkbutton(self.master,text=' ', anchor=W, command=self.Set_Input_States)
         self.Checkbutton_CutPerim.configure(variable=self.cutperim)
-        self.Label_Scandir      = Label(self.master,text='Scan Direction', anchor=E)
+        self.Label_Scandir      = Label(self.master,text='Cut Direction', anchor=E)
         self.ScanDir_OptionMenu = OptionMenu(root, self.scandir, 'Alternating', 'Positive', 'Negative', 'Up Mill', 'Down Mill')
         self.Label_Feed = Label(self.master,text='Feed Rate', anchor=E)
         self.Label_Feed_u = Label(self.master,textvariable=self.funits, anchor=W)
@@ -386,7 +386,7 @@ class Application(Frame):
         self.Entry_Zsafe.configure(textvariable=self.z_safe)
         self.Entry_Zsafe.bind('<Return>', self.Recalculate_Click)
         self.z_safe.trace_variable('w', self.Entry_Zsafe_Callback)
-        self.Label_Zcut = Label(self.master,text='Max Cut Depth', anchor=E)
+        self.Label_Zcut = Label(self.master,text='Z Bottom', anchor=E)
         self.Label_Zcut_u = Label(self.master,textvariable=self.units, anchor=W)
         self.Entry_Zcut = Entry(self.master,width='15')
         self.Entry_Zcut.configure(textvariable=self.z_cut)
@@ -414,7 +414,7 @@ class Application(Frame):
         self.ROUGH_Label_CutPerim = Label(self.master,text='Cut Perimeter')
         self.ROUGH_Checkbutton_CutPerim = Checkbutton(self.master,text=' ', anchor=W, command=self.Set_Input_States)
         self.ROUGH_Checkbutton_CutPerim.configure(variable=self.ROUGH_CUTPERIM)
-        self.ROUGH_Label_Scandir      = Label(self.master,text='Scan Direction', anchor=E)
+        self.ROUGH_Label_Scandir      = Label(self.master,text='Cut Direction', anchor=E)
         self.ROUGH_ScanDir_OptionMenu = OptionMenu(self.master, self.ROUGH_SCANDIR, 'Alternating', 'Positive', 'Negative', 'Up Mill', 'Down Mill')
         self.ROUGH_Label_Feed = Label(self.master,text='Feed Rate', anchor=E)
         self.ROUGH_Label_Feed_u = Label(self.master,textvariable=self.funits, anchor=W)
@@ -434,13 +434,13 @@ class Application(Frame):
         self.ROUGH_Entry_StepOver.configure(textvariable=self.ROUGH_STEPOVER)
         self.ROUGH_Entry_StepOver.bind('<Return>', self.Recalculate_Click)
         self.ROUGH_STEPOVER.trace_variable('w', self.ROUGH_Entry_StepOver_Callback)
-        self.ROUGH_Label_Roffset = Label(self.master,text='Offset', anchor=E)
+        self.ROUGH_Label_Roffset = Label(self.master,text='Finish Offset', anchor=E)
         self.ROUGH_Label_Roffset_u = Label(self.master,textvariable=self.units, anchor=W)
         self.ROUGH_Entry_Roffset = Entry(self.master,width='15')
         self.ROUGH_Entry_Roffset.configure(textvariable=self.ROUGH_OFFSET)
         self.ROUGH_Entry_Roffset.bind('<Return>', self.Recalculate_Click)
         self.ROUGH_OFFSET.trace_variable('w', self.ROUGH_Entry_Roffset_Callback)
-        self.ROUGH_Label_Rdepth = Label(self.master,text='Depth Per Pass', anchor=E)
+        self.ROUGH_Label_Rdepth = Label(self.master,text='Z Per Pass', anchor=E)
         self.ROUGH_Label_Rdepth_u = Label(self.master,textvariable=self.units, anchor=W)
         self.ROUGH_Entry_Rdepth = Entry(self.master,width='15')
         self.ROUGH_Entry_Rdepth.configure(textvariable=self.ROUGH_DEPTH_PP)
@@ -1171,26 +1171,26 @@ class Application(Frame):
     ##########################'''
     def Check_All_Variables(self):
         MAIN_error_cnt= \
-        self.entry_set(self.Entry_Yscale, self.Entry_Yscale_Check()    ,2) +\
-        self.entry_set(self.Entry_Toptol, self.Entry_Toptol_Check()    ,2) +\
-        self.entry_set(self.Entry_ToolDIA, self.Entry_ToolDIA_Check()  ,2) +\
-        self.entry_set(self.Entry_Vangle, self.Entry_Vangle_Check()    ,2) +\
-        self.entry_set(self.Entry_Feed, self.Entry_Feed_Check()         ,2) +\
-        self.entry_set(self.Entry_p_feed, self.Entry_p_feed_Check()  ,2)   +\
-        self.entry_set(self.Entry_StepOver, self.Entry_StepOver_Check(),2) +\
-        self.entry_set(self.Entry_Zsafe, self.Entry_Zsafe_Check()       ,2) +\
-        self.entry_set(self.Entry_Zcut, self.Entry_Zcut_Check()         ,2)
+        self.entry_set(self.Entry_Yscale, self.Entry_Yscale_Check(), 2) +\
+        self.entry_set(self.Entry_Toptol, self.Entry_Toptol_Check(), 2) +\
+        self.entry_set(self.Entry_ToolDIA, self.Entry_ToolDIA_Check(), 2) +\
+        self.entry_set(self.Entry_Vangle, self.Entry_Vangle_Check(), 2) +\
+        self.entry_set(self.Entry_Feed, self.Entry_Feed_Check(), 2) +\
+        self.entry_set(self.Entry_p_feed, self.Entry_p_feed_Check(), 2)   +\
+        self.entry_set(self.Entry_StepOver, self.Entry_StepOver_Check(), 2) +\
+        self.entry_set(self.Entry_Zsafe, self.Entry_Zsafe_Check(), 2) +\
+        self.entry_set(self.Entry_Zcut, self.Entry_Zcut_Check(), 2)
         GEN_error_cnt= \
-        self.entry_set(self.Entry_Tolerance,self.Entry_Tolerance_Check(),2) +\
-        self.entry_set(self.Entry_ContAngle,self.Entry_ContAngle_Check(),2)
+        self.entry_set(self.Entry_Tolerance, self.Entry_Tolerance_Check(), 2) +\
+        self.entry_set(self.Entry_ContAngle, self.Entry_ContAngle_Check(), 2)
         ROUGH_error_cnt= \
-        self.entry_set(self.ROUGH_Entry_ToolDIA, self.ROUGH_Entry_ToolDIA_Check()  ,2) +\
-        self.entry_set(self.ROUGH_Entry_Vangle, self.ROUGH_Entry_Vangle_Check()    ,2) +\
-        self.entry_set(self.ROUGH_Entry_Feed, self.ROUGH_Entry_Feed_Check()         ,2) +\
-        self.entry_set(self.ROUGH_Entry_p_feed, self.ROUGH_Entry_p_feed_Check()  ,2)   +\
-        self.entry_set(self.ROUGH_Entry_StepOver, self.ROUGH_Entry_StepOver_Check(),2) +\
-        self.entry_set(self.ROUGH_Entry_Roffset, self.ROUGH_Entry_Roffset_Check()  ,2) +\
-        self.entry_set(self.ROUGH_Entry_Rdepth, self.ROUGH_Entry_Rdepth_Check()    ,2)
+        self.entry_set(self.ROUGH_Entry_ToolDIA, self.ROUGH_Entry_ToolDIA_Check(), 2) +\
+        self.entry_set(self.ROUGH_Entry_Vangle, self.ROUGH_Entry_Vangle_Check(), 2) +\
+        self.entry_set(self.ROUGH_Entry_Feed, self.ROUGH_Entry_Feed_Check(), 2) +\
+        self.entry_set(self.ROUGH_Entry_p_feed, self.ROUGH_Entry_p_feed_Check(), 2)   +\
+        self.entry_set(self.ROUGH_Entry_StepOver, self.ROUGH_Entry_StepOver_Check(), 2) +\
+        self.entry_set(self.ROUGH_Entry_Roffset, self.ROUGH_Entry_Roffset_Check(), 2) +\
+        self.entry_set(self.ROUGH_Entry_Rdepth, self.ROUGH_Entry_Rdepth_Check(), 2)
         ERROR_cnt = MAIN_error_cnt + GEN_error_cnt + ROUGH_error_cnt
         if (ERROR_cnt > 0):
             self.statusbar.configure( bg = 'red' )
@@ -1723,6 +1723,7 @@ class Application(Frame):
                 self.PreviewCanvas.configure( width = self.w-675, height = self.h-50 )
                 self.PreviewCanvas_frame.place(x=220, y=10)
                 self.Set_Input_States()
+                self.Set_Input_States_ROUGH()
             self.Plot_Data()
 
     def Recalculate_RQD_Click(self, event):
